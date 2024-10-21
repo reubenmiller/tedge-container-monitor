@@ -1,2 +1,7 @@
 tedge-container-monitor
 .env
+output/
+dist/
+
+# MacOS
+.DS_Store

@@ -4,11 +4,16 @@ Copyright © 2024 thin-edge.io <info@thin-edge.io>
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+// Build data
+var buildVersion string
+var buildBranch string
 
 var logLevel string
 
@@ -22,6 +27,7 @@ examples and usage of using your application. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	Version: fmt.Sprintf("%s (branch=%s)", buildVersion, buildBranch),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return SetLogLevel()
 	},

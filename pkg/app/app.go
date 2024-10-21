@@ -39,6 +39,13 @@ func NewApp(device tedge.Target, serviceName string) (*App, error) {
 	return application, nil
 }
 
+func (a *App) Stop() {
+	if a.client != nil {
+		slog.Info("Disconnecting MQTT client cleanly")
+		a.client.Client.Disconnect(250)
+	}
+}
+
 func (a *App) Update() error {
 	tedgeClient := a.client
 	entities, err := tedgeClient.GetEntities()

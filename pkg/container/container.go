@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-units"
@@ -218,24 +219,59 @@ func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (map
 	return stats, err
 }
 
-func (c *ContainerClient) List(ctx context.Context) ([]TedgeContainer, error) {
+type FilterOptions struct {
+	Names  []string
+	Labels []string
+	IDs    []string
+}
 
-	// "com.docker.compose"
-	// filters := filters.NewArgs(filters.KeyValuePair{
-	// 	Key:   "label",
-	// 	Value: "com.docker.compose",
-	// })
+func (fo FilterOptions) IsEmpty() bool {
+	return len(fo.Names) == 0 && len(fo.Labels) == 0
+}
 
+func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]TedgeContainer, error) {
 	// Filter for docker compose projects
-	// filters := filters.NewArgs(filters.Arg("label", "com.docker.compose.project"))
+	listOptions := container.ListOptions{
+		Size: true,
+	}
+
+	filterValues := make([]filters.KeyValuePair, 0)
+
+	// Match by container name
+	for _, name := range options.Names {
+		filterValues = append(filterValues, filters.KeyValuePair{
+			Key:   "name",
+			Value: name,
+		})
+	}
+
+	// Match by container id
+	for _, value := range options.IDs {
+		filterValues = append(filterValues, filters.KeyValuePair{
+			Key:   "id",
+			Value: value,
+		})
+	}
+
+	// filterValues = append(filterValues, filters.Arg("label", "com.docker.compose.project"))
+
+	// Match by label
+	for _, label := range options.Labels {
+		filterValues = append(filterValues, filters.KeyValuePair{
+			Key:   "label",
+			Value: label,
+		})
+	}
+
+	if len(filterValues) > 0 {
+		listOptions.Filters = filters.NewArgs(filterValues...)
+	}
 
 	timestamp := JSONTime{
 		Time: time.Now(),
 	}
-	containers, err := c.Client.ContainerList(ctx, container.ListOptions{
-		Size: true,
-		// Filters: filters,
-	})
+
+	containers, err := c.Client.ContainerList(ctx, listOptions)
 	if err != nil {
 		return nil, err
 	}

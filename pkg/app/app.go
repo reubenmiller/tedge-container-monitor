@@ -46,12 +46,16 @@ func (a *App) Stop() {
 	}
 }
 
-func (a *App) Update() error {
+func (a *App) Update(filterOptions container.FilterOptions) error {
 	tedgeClient := a.client
 	entities, err := tedgeClient.GetEntities()
 	if err != nil {
 		return err
 	}
+
+	// Don't remove stale services when doing client side filtering
+	// as there is no clean way to tell
+	removeStaleServices := filterOptions.IsEmpty()
 
 	// Record all registered services
 	staleServices := make(map[string]struct{})
@@ -68,7 +72,7 @@ func (a *App) Update() error {
 	}
 
 	slog.Info("Reading containers")
-	items, err := client.List(context.Background())
+	items, err := client.List(context.Background(), filterOptions)
 	if err != nil {
 		return err
 	}
@@ -152,28 +156,30 @@ func (a *App) Update() error {
 	}
 
 	// Delete removed values, via MQTT and c8y API
-	slog.Info("Removing any stale services")
-	for staleTopic := range staleServices {
-		slog.Info("Removing stale service", "topic", staleTopic)
-		target, err := tedge.NewTargetFromTopic(staleTopic)
-		if err != nil {
-			slog.Warn("Invalid topic structure", "err", err)
-			continue
-		}
+	if removeStaleServices {
+		slog.Info("Removing any stale services")
+		for staleTopic := range staleServices {
+			slog.Info("Removing stale service", "topic", staleTopic)
+			target, err := tedge.NewTargetFromTopic(staleTopic)
+			if err != nil {
+				slog.Warn("Invalid topic structure", "err", err)
+				continue
+			}
 
-		if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
-			return err
-		}
-		tedgeClient.DeregisterEntity(*target)
+			if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
+				return err
+			}
+			tedgeClient.DeregisterEntity(*target)
 
-		// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
-		// Should it try to reconcile with the cloud to delete orphaned services?
-		// Delete service directly from Cumulocity using the local Cumulocity Proxy
-		target.CloudIdentity = tedgeClient.Target.CloudIdentity
-		if target.CloudIdentity != "" {
-			tedgeClient.DeleteCumulocityManagedObject(*target)
+			// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
+			// Should it try to reconcile with the cloud to delete orphaned services?
+			// Delete service directly from Cumulocity using the local Cumulocity Proxy
+			target.CloudIdentity = tedgeClient.Target.CloudIdentity
+			if target.CloudIdentity != "" {
+				tedgeClient.DeleteCumulocityManagedObject(*target)
+			}
 		}
-
 	}
+
 	return nil
 }

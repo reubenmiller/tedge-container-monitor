@@ -243,6 +243,7 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 	// Filter for docker compose projects
 	listOptions := container.ListOptions{
 		Size: true,
+		All:  true,
 	}
 
 	filterValues := make([]filters.KeyValuePair, 0)

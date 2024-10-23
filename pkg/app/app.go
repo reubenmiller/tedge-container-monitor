@@ -266,24 +266,25 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 			markedForDeletion = append(markedForDeletion, *target)
 		}
 
-		// Delete cloud 
+		// Delete cloud
 		if len(markedForDeletion) > 0 {
 			// Delay before deleting messages
-			time.Sleep(500*time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			for _, target := range markedForDeletion {
 				slog.Info("Removing stale service", "topic", target.Topic())
-	
+
 				// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
 				// Should it try to reconcile with the cloud to delete orphaned services?
 				// Delete service directly from Cumulocity using the local Cumulocity Proxy
 				target.CloudIdentity = tedgeClient.Target.CloudIdentity
 				if target.CloudIdentity != "" {
 					// Delay deleting the value
-					if _, err := tedgeClient.DeleteCumulocityManagedObject(*target); err != nil {
+					if _, err := tedgeClient.DeleteCumulocityManagedObject(target); err != nil {
 						slog.Warn("Failed to delete managed object.", "err", err)
 					}
 				}
 			}
+		}
 	}
 
 	return nil

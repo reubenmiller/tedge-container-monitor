@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/thin-edge/tedge-container-monitor/pkg/container"
@@ -241,6 +242,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	}
 
 	// Delete removed values, via MQTT and c8y API
+	markedForDeletion := make([]tedge.Target, 0)
 	if removeStaleServices {
 		slog.Info("Checking for any stale services")
 		for staleTopic := range existingServices {
@@ -251,6 +253,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 				continue
 			}
 
+			// FIXME: Check if sending an empty retain message to the twin topic will recreate
 			if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
 				return err
 			}
@@ -258,16 +261,29 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 				slog.Warn("Failed to deregister entity.", "err", err)
 			}
 
-			// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
-			// Should it try to reconcile with the cloud to delete orphaned services?
-			// Delete service directly from Cumulocity using the local Cumulocity Proxy
-			target.CloudIdentity = tedgeClient.Target.CloudIdentity
-			if target.CloudIdentity != "" {
-				if _, err := tedgeClient.DeleteCumulocityManagedObject(*target); err != nil {
-					slog.Warn("Failed to delete managed object.", "err", err)
+			// mark targets for deletion from the cloud, but don't delete them yet to give time
+			// for thin-edge.io to process the status updates
+			markedForDeletion = append(markedForDeletion, *target)
+		}
+
+		// Delete cloud 
+		if len(markedForDeletion) > 0 {
+			// Delay before deleting messages
+			time.Sleep(500*time.Millisecond)
+			for _, target := range markedForDeletion {
+				slog.Info("Removing stale service", "topic", target.Topic())
+	
+				// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
+				// Should it try to reconcile with the cloud to delete orphaned services?
+				// Delete service directly from Cumulocity using the local Cumulocity Proxy
+				target.CloudIdentity = tedgeClient.Target.CloudIdentity
+				if target.CloudIdentity != "" {
+					// Delay deleting the value
+					if _, err := tedgeClient.DeleteCumulocityManagedObject(*target); err != nil {
+						slog.Warn("Failed to delete managed object.", "err", err)
+					}
 				}
 			}
-		}
 	}
 
 	return nil

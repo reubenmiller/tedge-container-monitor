@@ -50,6 +50,9 @@ to the thin-edge.io interface.
 			return err
 		}
 
+		// FIXME: Wait until the entity store has been filled
+		time.Sleep(200 * time.Millisecond)
+
 		if config.RunOnce {
 			// Cleanly stop the application in run-once mode
 			// so that the service still appears to be "up" as the Last Will and Testament

@@ -17,17 +17,20 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
     * [x] Linux packages
     * [x] Container image
 
-* [ ] Support filtering on container name
+* [x] Support filtering on container name
 
-* [ ] Subscribe to `te/device/main/service/+/cmd/health/check` to support on demand triggering to refresh container state
+* [x] Subscribe to `te/device/main/service/+/cmd/health/check` to support on demand triggering to refresh container state
 
-* [ ] Support filter criteria to only pick specific containers with the given labels
+* [x] Support filter criteria to only pick specific containers with the given labels
 
-* [ ] Configuration
-    * [ ] Enable/disable telemetry data
-    * [ ] Enable/disbale meta info
-    * [ ] Enable/disbale compose project monitoring
-    * [ ] Enable/disbale container monitoring
+* [x] Configuration
+    * [x] Enable/disable telemetry data
+    * [x] Enable/disable compose project monitoring
+    * [x] Enable/disable container monitoring
+
+* [x] Support excluding containers with a give label
+
+* [x] Support excluding containers by name
 
 * [ ] Publish telemetry data (in same format at docker stats)
 

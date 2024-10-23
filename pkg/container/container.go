@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,6 +93,9 @@ type Container struct {
 	// Only used for container groups
 	ServiceName string `json:"serviceName,omitempty"`
 	ProjectName string `json:"projectName,omitempty"`
+
+	// Private values
+	Labels map[string]string `json:"-"`
 }
 
 func NewContainerFromDockerContainer(item *types.Container) Container {
@@ -105,6 +109,7 @@ func NewContainerFromDockerContainer(item *types.Container) Container {
 		CreatedAt:   time.Unix(item.Created, 0).Format(time.RFC3339),
 		Ports:       FormatPorts(item.Ports),
 		NetworkMode: item.HostConfig.NetworkMode,
+		Labels:      item.Labels,
 	}
 
 	// Mimic filesystem
@@ -223,10 +228,15 @@ type FilterOptions struct {
 	Names  []string
 	Labels []string
 	IDs    []string
+
+	// Client side filters
+	Types            []string
+	ExcludeNames     []string
+	ExcludeWithLabel []string
 }
 
 func (fo FilterOptions) IsEmpty() bool {
-	return len(fo.Names) == 0 && len(fo.Labels) == 0
+	return len(fo.Names) == 0 && len(fo.Labels) == 0 && len(fo.IDs) == 0
 }
 
 func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]TedgeContainer, error) {
@@ -304,11 +314,35 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 			}
 		}
 
-		// Ignore docker compose projects
+		// Set service type. A docker compose project is a "container-group"
 		if _, ok := i.Labels["com.docker.compose.project"]; ok {
 			item.ServiceType = ContainerGroupType
 		}
 
+		// Apply client side filters
+		if len(options.Types) > 0 {
+			if !slices.Contains(options.Types, item.ServiceType) {
+				continue
+			}
+		}
+
+		if len(options.ExcludeNames) > 0 {
+			if slices.Contains(options.ExcludeNames, item.Name) {
+				continue
+			}
+		}
+
+		if len(options.ExcludeWithLabel) > 0 {
+			hasLabel := false
+			for _, label := range options.ExcludeWithLabel {
+				if _, hasLabel = item.Container.Labels[label]; hasLabel {
+					break
+				}
+			}
+			if hasLabel {
+				continue
+			}
+		}
 		items = append(items, item)
 	}
 

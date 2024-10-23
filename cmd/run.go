@@ -43,7 +43,9 @@ to the thin-edge.io interface.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		device := tedge.NewTarget(config.TopicRoot, config.TopicID)
 		device.CloudIdentity = config.DeviceID
-		application, err := app.NewApp(*device, config.ServiceName)
+		application, err := app.NewApp(*device, app.Config{
+			ServiceName: config.ServiceName,
+		})
 		if err != nil {
 			return err
 		}
@@ -111,6 +113,7 @@ func init() {
 	runCmd.Flags().StringSliceVar(&config.FilterOptions.Names, "name", []string{}, "Only include given container names")
 	runCmd.Flags().StringSliceVar(&config.FilterOptions.Labels, "label", []string{}, "Only include containers with the given labels")
 	runCmd.Flags().StringSliceVar(&config.FilterOptions.IDs, "id", []string{}, "Only include containers with the given ids")
+	runCmd.Flags().StringSliceVar(&config.FilterOptions.Types, "type", []string{container.ContainerType, container.ContainerGroupType}, "Filter by container type")
 	runCmd.Flags().StringVar(&config.TopicRoot, "mqtt-topic-root", "te", "MQTT root prefix")
 	runCmd.Flags().StringVar(&config.TopicID, "mqtt-device-topic-id", "device/main//", "The device MQTT topic identifier")
 	runCmd.Flags().BoolVar(&config.RunOnce, "once", false, "Only run the monitor once")

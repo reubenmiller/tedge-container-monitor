@@ -18,16 +18,24 @@ type App struct {
 
 	Device *tedge.Target
 
+	config         Config
 	shutdown       chan struct{}
 	updateRequests chan container.FilterOptions
 	updateResults  chan error
 	wg             sync.WaitGroup
 }
 
-func NewApp(device tedge.Target, serviceName string) (*App, error) {
-	serviceTarget := device.Service(serviceName)
+type Config struct {
+	ServiceName string
+
+	// Feature flags
+	EnableMetrics bool
+}
+
+func NewApp(device tedge.Target, config Config) (*App, error) {
+	serviceTarget := device.Service(config.ServiceName)
 	tedgeOpts := tedge.NewClientConfig()
-	tedgeClient := tedge.NewClient(*serviceTarget, serviceName, tedgeOpts)
+	tedgeClient := tedge.NewClient(*serviceTarget, config.ServiceName, tedgeOpts)
 
 	if err := tedgeClient.Connect(); err != nil {
 		return nil, err
@@ -46,6 +54,7 @@ func NewApp(device tedge.Target, serviceName string) (*App, error) {
 	application := &App{
 		client:         tedgeClient,
 		Device:         &device,
+		config:         config,
 		updateRequests: make(chan container.FilterOptions),
 		updateResults:  make(chan error),
 		shutdown:       make(chan struct{}),
@@ -100,7 +109,6 @@ func (a *App) worker() {
 		case opts := <-a.updateRequests:
 			slog.Info("Processing update request")
 			err := a.doUpdate(opts)
-			slog.Info("Result", "err", err)
 			// Don't block when publishing results
 			go func() {
 				a.updateResults <- err
@@ -130,10 +138,10 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	removeStaleServices := filterOptions.IsEmpty()
 
 	// Record all registered services
-	staleServices := make(map[string]struct{})
+	existingServices := make(map[string]struct{})
 	for k, v := range entities {
 		if v.(map[string]any)["type"] == container.ContainerType || v.(map[string]any)["type"] == container.ContainerGroupType {
-			staleServices[k] = struct{}{}
+			existingServices[k] = struct{}{}
 		}
 	}
 	slog.Info("Found entities.", "total", len(entities))
@@ -158,12 +166,12 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		target := a.Device.Service(item.Name)
 
 		// Skip registration message if it already exists
-		if _, ok := staleServices[target.Topic()]; ok {
+		if _, ok := existingServices[target.Topic()]; ok {
 			slog.Debug("Container is already registered", "topic", target.Topic())
-			delete(staleServices, target.Topic())
+			delete(existingServices, target.Topic())
 			continue
 		}
-		delete(staleServices, target.Topic())
+		delete(existingServices, target.Topic())
 
 		payload := map[string]any{
 			"@type": "service",
@@ -221,19 +229,21 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	}
 
 	// Update metrics
-	for _, item := range items {
-		stats, err := client.GetStats(context.Background(), item.Container.Id)
-		if err != nil {
-			slog.Warn("Failed to read container stats", "err", err)
-		} else {
-			slog.Info("Container stats.", "stats", stats)
+	if a.config.EnableMetrics {
+		for _, item := range items {
+			stats, err := client.GetStats(context.Background(), item.Container.Id)
+			if err != nil {
+				slog.Warn("Failed to read container stats", "err", err)
+			} else {
+				slog.Info("Container stats.", "stats", stats)
+			}
 		}
 	}
 
 	// Delete removed values, via MQTT and c8y API
 	if removeStaleServices {
 		slog.Info("Checking for any stale services")
-		for staleTopic := range staleServices {
+		for staleTopic := range existingServices {
 			slog.Info("Removing stale service", "topic", staleTopic)
 			target, err := tedge.NewTargetFromTopic(staleTopic)
 			if err != nil {

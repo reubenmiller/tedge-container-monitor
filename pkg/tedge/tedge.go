@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -16,8 +17,8 @@ var StatusUp = "up"
 var StatusDown = "down"
 var StatusUnknown = "unknown"
 
-func PayloadHealthStatusDown() []byte {
-	return []byte(fmt.Sprintf(`{"status":"%s"}`, StatusDown))
+func PayloadHealthStatusDown() string {
+	return fmt.Sprintf(`{"status":"%s"}`, StatusDown)
 }
 
 func PayloadHealthStatus(payload map[string]any, status string) ([]byte, error) {
@@ -31,6 +32,9 @@ type Client struct {
 	Client           mqtt.Client
 	Target           Target
 	CumulocityClient *c8y.Client
+
+	Entities map[string]any
+	mutex    sync.RWMutex
 }
 
 type ClientConfig struct {
@@ -38,6 +42,8 @@ type ClientConfig struct {
 	MqttPort uint16
 	C8yHost  string
 	C8yPort  uint16
+
+	OnConnection func()
 }
 
 func NewClientConfig() *ClientConfig {
@@ -52,16 +58,29 @@ func NewClientConfig() *ClientConfig {
 func NewClient(target Target, serviceName string, config *ClientConfig) *Client {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.MqttHost, config.MqttPort))
-	opts.ClientID = fmt.Sprintf("%s#%s", target.Topic(), serviceName)
-	opts.CleanSession = true
-	opts.Order = false
-	opts.WillRetained = true
-	opts.AutoReconnect = true
-	opts.AutoAckDisabled = false
-	opts.WillEnabled = true
-	opts.WillQos = 1
-	opts.WillPayload = PayloadHealthStatusDown()
-	opts.WillTopic = GetHealthTopic(target)
+	opts.SetClientID(serviceName)
+	opts.SetClientID(fmt.Sprintf("%s#%s", serviceName, target.Topic()))
+	opts.SetCleanSession(true)
+	// opts.SetOrderMatters(true)
+	opts.SetWill(GetHealthTopic(target), PayloadHealthStatusDown(), 1, true)
+	opts.SetAutoReconnect(true)
+	opts.SetAutoAckDisabled(false)
+	opts.SetResumeSubs(false)
+	opts.SetKeepAlive(60 * time.Second)
+
+	opts.SetOnConnectHandler(func(c mqtt.Client) {
+		slog.Info("MQTT Client is connected")
+	})
+	opts.SetConnectionLostHandler(func(c mqtt.Client, err error) {
+		slog.Info("MQTT Client is disconnected.", "err", err)
+	})
+
+	if config.OnConnection != nil {
+		opts.SetOnConnectHandler(func(c mqtt.Client) {
+			config.OnConnection()
+		})
+	}
+
 	client := mqtt.NewClient(opts)
 
 	// TODO: Read port and host from settings
@@ -71,10 +90,35 @@ func NewClient(target Target, serviceName string, config *ClientConfig) *Client 
 
 	slog.Info("MQTT Client options.", "clientID", opts.ClientID)
 
-	return &Client{
+	c := &Client{
 		Client:           client,
 		Target:           target,
 		CumulocityClient: c8yclient,
+		Entities:         make(map[string]any),
+	}
+
+	registrationTopics := GetTopic(*target.Service("+"))
+	slog.Info("Subscribing to registration topics.", "topic", registrationTopics)
+	c.Client.AddRoute(GetTopic(*target.Service("+")), func(mqttc mqtt.Client, m mqtt.Message) {
+		go c.handleRegistrationMessage(mqttc, m)
+	})
+	return c
+}
+
+func (c *Client) handleRegistrationMessage(_ mqtt.Client, m mqtt.Message) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if len(m.Payload()) > 0 {
+		payload := make(map[string]any)
+		if err := json.Unmarshal(m.Payload(), &payload); err != nil {
+			slog.Warn("Could not unmarshal registration message", "err", err)
+		} else {
+			c.Entities[m.Topic()] = payload
+		}
+	} else {
+		slog.Info("Removing entity from store.", "topic", m.Topic())
+		delete(c.Entities, m.Topic())
 	}
 }
 
@@ -100,7 +144,14 @@ func (c *Client) Connect() error {
 	}
 	slog.Info("Registered service", "topic", GetTopicRegistration(c.Target))
 
-	return nil
+	// TODO: Let the caller decide which topics to subscribe to
+	subscriptions := make(map[string]byte)
+	subscriptions[c.Target.RootPrefix+"/+/+/+/+"] = 1
+	subscriptions[GetTopic(*c.Target.Service("+"), "cmd", "health", "check")] = 1
+	slog.Info("Subscribing to topics.", "topics", subscriptions)
+	tok = c.Client.SubscribeMultiple(subscriptions, nil)
+	tok.Wait()
+	return tok.Error()
 }
 
 // Delete a Cumulocity Managed object by External ID
@@ -144,43 +195,32 @@ func (c *Client) DeregisterEntity(target Target) error {
 	return nil
 }
 
+// func (c *Client) Register(topics []string, qos byte, handler MessageHandler) error {
+// 	handlerWrapper := func(c mqtt.Client, m mqtt.Message) {
+// 		payloadLen := len(m.Payload())
+// 		slog.Info("Received message.", "topic", m.Topic(), "payload_len", payloadLen)
+
+// 		if payloadLen == 0 {
+// 			slog.Info("Ignoring empty message", "topic", m.Topic())
+// 			return
+// 		}
+// 		handler(m.Topic(), string(m.Payload()))
+// 	}
+
+// 	for _, topic := range topics {
+// 		if _, exists := s.Subscriptions[topic]; exists {
+// 			slog.Warn("Duplicate topic detected. The new handler will replace the previous one.", "topic", topic)
+// 		}
+// 		s.Subscriptions[topic] = qos
+// 		slog.Info("Adding mqtt route.", "topic", topic)
+// 		s.Client.AddRoute(topic, handlerWrapper)
+// 	}
+// 	return nil
+// }
+
 // Get the thin-edge.io entities that have already been registered (as retained messages)
 func (c *Client) GetEntities() (map[string]any, error) {
-	done := make(chan struct{})
-	values := make(chan mqtt.Message)
-
-	tok := c.Client.Subscribe(NewTarget("", "+/+/+/+").Topic(), 1, func(c mqtt.Client, m mqtt.Message) {
-		if !m.Retained() {
-			done <- struct{}{}
-		}
-		values <- m
-	})
-	<-tok.Done()
-	if err := tok.Error(); err != nil {
-		return nil, err
-	}
-
-	register := make(map[string]any)
-out:
-	for {
-		select {
-		case res := <-values:
-			if len(res.Payload()) > 0 {
-				payload := make(map[string]any)
-				if err := json.Unmarshal(res.Payload(), &payload); err != nil {
-					slog.Warn("Could not unmarshal registration message", "err", err)
-				} else {
-					register[res.Topic()] = payload
-				}
-			}
-
-		case <-done:
-			break out
-		case <-time.After(1 * time.Second):
-			slog.Debug("Finished waiting for retained messages")
-			break out
-		}
-	}
-
-	return register, nil
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.Entities, nil
 }

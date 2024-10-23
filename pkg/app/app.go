@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/thin-edge/tedge-container-monitor/pkg/container"
 	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
 )
@@ -14,11 +17,17 @@ type App struct {
 	client *tedge.Client
 
 	Device *tedge.Target
+
+	shutdown       chan struct{}
+	updateRequests chan container.FilterOptions
+	updateResults  chan error
+	wg             sync.WaitGroup
 }
 
 func NewApp(device tedge.Target, serviceName string) (*App, error) {
 	serviceTarget := device.Service(serviceName)
-	tedgeClient := tedge.NewClient(*serviceTarget, serviceName, tedge.NewClientConfig())
+	tedgeOpts := tedge.NewClientConfig()
+	tedgeClient := tedge.NewClient(*serviceTarget, serviceName, tedgeOpts)
 
 	if err := tedgeClient.Connect(); err != nil {
 		return nil, err
@@ -29,24 +38,87 @@ func NewApp(device tedge.Target, serviceName string) (*App, error) {
 		if currentUser, _, err := tedgeClient.CumulocityClient.User.GetCurrentUser(context.Background()); err == nil {
 			tedgeClient.Target.CloudIdentity = strings.TrimPrefix(currentUser.Username, "device_")
 			slog.Info("Found Cumulocity ExternalID", "value", tedgeClient.Target.CloudIdentity)
+		} else {
+			slog.Warn("Failed to lookup Cumulocity ExternalID.", "err", err)
 		}
 	}
 
 	application := &App{
-		client: tedgeClient,
-		Device: &device,
+		client:         tedgeClient,
+		Device:         &device,
+		updateRequests: make(chan container.FilterOptions),
+		updateResults:  make(chan error),
+		shutdown:       make(chan struct{}),
+		wg:             sync.WaitGroup{},
 	}
+
+	// Start background task to process requests
+	application.wg.Add(1)
+	go application.worker()
+
 	return application, nil
 }
 
-func (a *App) Stop() {
+func (a *App) Subscribe() error {
+	topic := tedge.GetTopic(*a.Device.Service("+"), "cmd", "health", "check")
+	slog.Info("Listening to commands on topic.", "topic", topic)
+
+	a.client.Client.AddRoute(topic, func(c mqtt.Client, m mqtt.Message) {
+		parts := strings.Split(m.Topic(), "/")
+		if len(parts) > 5 {
+			slog.Info("Received request to update service data.", "service", parts[4], "topic", topic)
+			go func(name string) {
+				a.updateRequests <- container.FilterOptions{
+					Names: []string{
+						fmt.Sprintf("^%s$", name),
+					},
+				}
+			}(parts[4])
+		}
+	})
+
+	return nil
+}
+
+func (a *App) Stop(clean bool) {
 	if a.client != nil {
-		slog.Info("Disconnecting MQTT client cleanly")
-		a.client.Client.Disconnect(250)
+		if clean {
+			slog.Info("Disconnecting MQTT client cleanly")
+			a.client.Client.Disconnect(250)
+		}
+	}
+	a.shutdown <- struct{}{}
+
+	// Wait for shutdown confirmation
+	a.wg.Wait()
+}
+
+func (a *App) worker() {
+	defer a.wg.Done()
+	for {
+		select {
+		case opts := <-a.updateRequests:
+			slog.Info("Processing update request")
+			err := a.doUpdate(opts)
+			slog.Info("Result", "err", err)
+			// Don't block when publishing results
+			go func() {
+				a.updateResults <- err
+			}()
+		case <-a.shutdown:
+			slog.Info("Stopping background task")
+			return
+		}
 	}
 }
 
 func (a *App) Update(filterOptions container.FilterOptions) error {
+	a.updateRequests <- filterOptions
+	err := <-a.updateResults
+	return err
+}
+
+func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	tedgeClient := a.client
 	entities, err := tedgeClient.GetEntities()
 	if err != nil {
@@ -64,7 +136,10 @@ func (a *App) Update(filterOptions container.FilterOptions) error {
 			staleServices[k] = struct{}{}
 		}
 	}
-	slog.Info("Found entities", "total", len(entities))
+	slog.Info("Found entities.", "total", len(entities))
+	for key := range entities {
+		slog.Debug("Entity store.", "key", key)
+	}
 
 	client, err := container.NewContainerClient()
 	if err != nil {
@@ -157,7 +232,7 @@ func (a *App) Update(filterOptions container.FilterOptions) error {
 
 	// Delete removed values, via MQTT and c8y API
 	if removeStaleServices {
-		slog.Info("Removing any stale services")
+		slog.Info("Checking for any stale services")
 		for staleTopic := range staleServices {
 			slog.Info("Removing stale service", "topic", staleTopic)
 			target, err := tedge.NewTargetFromTopic(staleTopic)
@@ -169,14 +244,18 @@ func (a *App) Update(filterOptions container.FilterOptions) error {
 			if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
 				return err
 			}
-			tedgeClient.DeregisterEntity(*target)
+			if err := tedgeClient.DeregisterEntity(*target); err != nil {
+				slog.Warn("Failed to deregister entity.", "err", err)
+			}
 
 			// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
 			// Should it try to reconcile with the cloud to delete orphaned services?
 			// Delete service directly from Cumulocity using the local Cumulocity Proxy
 			target.CloudIdentity = tedgeClient.Target.CloudIdentity
 			if target.CloudIdentity != "" {
-				tedgeClient.DeleteCumulocityManagedObject(*target)
+				if _, err := tedgeClient.DeleteCumulocityManagedObject(*target); err != nil {
+					slog.Warn("Failed to delete managed object.", "err", err)
+				}
 			}
 		}
 	}

@@ -20,6 +20,7 @@ type Config struct {
 	TopicRoot     string
 	TopicID       string
 	ServiceName   string
+	DeviceID      string
 	Names         []string
 	Labels        []string
 	RunOnce       bool
@@ -41,6 +42,7 @@ to the thin-edge.io interface.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		device := tedge.NewTarget(config.TopicRoot, config.TopicID)
+		device.CloudIdentity = config.DeviceID
 		application, err := app.NewApp(*device, config.ServiceName)
 		if err != nil {
 			return err
@@ -51,8 +53,13 @@ to the thin-edge.io interface.
 			// so that the service still appears to be "up" as the Last Will and Testament
 			// message should not be sent (as the exit is expected)
 			// This logic is similar to SystemD's RemainAfterExit=yes setting
-			defer application.Stop()
+			defer application.Stop(true)
 			return application.Update(config.FilterOptions)
+		}
+
+		if err := application.Subscribe(); err != nil {
+			slog.Error("Failed to subscribe to commands.", "err", err)
+			return err
 		}
 
 		if err := application.Update(config.FilterOptions); err != nil {
@@ -64,29 +71,30 @@ to the thin-edge.io interface.
 			config.Interval = MinimumPollingInterval
 		}
 
-		ticker := time.NewTicker(config.Interval)
-		done := make(chan bool)
+		// done := make(chan struct{})
 
 		// Background poller
-		go func() {
-			for {
-				select {
-				case <-done:
-					return
-				case <-ticker.C:
-					slog.Info("Updating container status")
-					if err := application.Update(config.FilterOptions); err != nil {
-						slog.Warn("Failed to update container state.", "err", err)
-					}
-				}
-			}
-		}()
 
 		// Wait for termination signal
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-		<-stop
-		done <- true
+
+		ticker := time.NewTicker(config.Interval)
+	out:
+		for {
+			select {
+			case <-stop:
+				slog.Info("Received stop signal")
+				break out
+			case <-ticker.C:
+				slog.Info("Updating container status")
+				if err := application.Update(config.FilterOptions); err != nil {
+					slog.Warn("Failed to update container state.", "err", err)
+				}
+			}
+		}
+
+		application.Stop(false)
 
 		slog.Info("Shutting down...")
 		return nil
@@ -98,6 +106,7 @@ func init() {
 		FilterOptions: container.FilterOptions{},
 	}
 	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().StringVar(&config.DeviceID, "device-id", "", "thin-edge.io device id")
 	runCmd.Flags().StringVar(&config.ServiceName, "service-name", "tedge-container-monitor", "Service name")
 	runCmd.Flags().StringSliceVar(&config.FilterOptions.Names, "name", []string{}, "Only include given container names")
 	runCmd.Flags().StringSliceVar(&config.FilterOptions.Labels, "label", []string{}, "Only include containers with the given labels")

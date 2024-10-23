@@ -23,7 +23,7 @@ func (t *Target) Topic() string {
 }
 
 func (t *Target) Service(name string) *Target {
-	target := NewTarget(t.RootPrefix, strings.TrimRight(t.TopicID, "/")+"/service/"+name)
+	target := NewTarget(t.RootPrefix, strings.Join(strings.Split(t.TopicID, "/")[0:2], "/")+"/service/"+name)
 	target.CloudIdentity = t.CloudIdentity
 	return target
 }

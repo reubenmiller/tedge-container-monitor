@@ -16,6 +16,11 @@ func Test_TargetServiceTopic(t *testing.T) {
 	assert.Equal(t, "te/device/main/service/foo", target.Service("foo").Topic())
 }
 
+func Test_TargetChildServiceTopic(t *testing.T) {
+	target := NewTarget("", "device/child01/service/other")
+	assert.Equal(t, "te/device/child01/service/foo", target.Service("foo").Topic())
+}
+
 func Test_TargetExternalID(t *testing.T) {
 	target := &Target{
 		RootPrefix:    "te",

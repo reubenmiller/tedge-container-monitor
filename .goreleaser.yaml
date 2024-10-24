@@ -94,7 +94,7 @@ nfpms:
     contents:
       # Services
       - src: ./packaging/services/systemd/tedge-container-monitor.service
-        dst: /usr/lib/systemd/system/tedge-mapper-template.service
+        dst: /usr/lib/systemd/system/tedge-container-monitor.service
         file_info:
           mode: 0644
           owner: tedge
@@ -109,13 +109,13 @@ nfpms:
 
       # Completions
       - src: ./output/completions.bash
-        dst: /etc/bash_completion.d/tedge-mapper-template
+        dst: /etc/bash_completion.d/tedge-container-monitor
       
       - src: ./output/completions.zsh
-        dst: /usr/local/share/zsh/site-functions/_tedge-mapper-template
+        dst: /usr/local/share/zsh/site-functions/_tedge-container-monitor
       
       - src: ./output/completions.fish
-        dst: /usr/share/fish/vendor_completions.d/tedge-mapper-template.fish
+        dst: /usr/share/fish/vendor_completions.d/tedge-container-monitor.fish
       
       # Addons
       # - src: routes/*.yaml

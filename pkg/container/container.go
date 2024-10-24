@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -297,6 +299,16 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 		networkIndex[netw.ID] = i
 	}
 
+	// Pre-compile regular expressions
+	excludeNamesRegex := make([]regexp.Regexp, 0, len(options.ExcludeNames))
+	for _, pattern := range options.ExcludeNames {
+		if p, err := regexp.Compile(pattern); err != nil {
+			slog.Warn("Invalid excludeNames regex pattern.", "pattern", pattern, "err", err)
+		} else {
+			excludeNamesRegex = append(excludeNamesRegex, *p)
+		}
+	}
+
 	items := make([]TedgeContainer, 0, len(containers))
 	for _, i := range containers {
 		container := NewContainerFromDockerContainer(&i)
@@ -327,8 +339,15 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 			}
 		}
 
-		if len(options.ExcludeNames) > 0 {
-			if slices.Contains(options.ExcludeNames, item.Name) {
+		if len(excludeNamesRegex) > 0 {
+			ignoreContainer := false
+			for _, pattern := range excludeNamesRegex {
+				if pattern.MatchString(item.Container.Name) || pattern.MatchString(item.Name) {
+					ignoreContainer = true
+					break
+				}
+			}
+			if ignoreContainer {
 				continue
 			}
 		}

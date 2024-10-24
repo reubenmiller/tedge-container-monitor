@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -179,7 +180,38 @@ type ContainerClient struct {
 	Client *client.Client
 }
 
+func socketExists(p string) bool {
+	_, err := os.Stat(strings.TrimPrefix(p, "unix://"))
+	return err == nil
+}
+
+func findContainerEngineSocket() (socketAddr string) {
+	containerSockets := []string{
+		"unix:///run/podman/podman.sock",
+	}
+
+	for _, addr := range containerSockets {
+		if strings.HasPrefix(addr, "unix://") {
+			if socketExists(addr) {
+				socketAddr = addr
+				break
+			}
+		}
+	}
+	return socketAddr
+}
+
 func NewContainerClient() (*ContainerClient, error) {
+	// Find container socket
+	if v := os.Getenv("DOCKER_HOST"); v == "" {
+		if addr := findContainerEngineSocket(); addr != "" {
+			if err := os.Setenv("DOCKER_HOST", addr); err != nil {
+				return nil, err
+			}
+			slog.Info("Using container engine socket.", "value", addr)
+		}
+	}
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err

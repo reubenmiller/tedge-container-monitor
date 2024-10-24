@@ -78,11 +78,15 @@ func (a *App) Subscribe() error {
 		if len(parts) > 5 {
 			slog.Info("Received request to update service data.", "service", parts[4], "topic", topic)
 			go func(name string) {
-				a.updateRequests <- container.FilterOptions{
-					Names: []string{
+				opts := container.FilterOptions{}
+				// If the name matches the current service name, then
+				// update all containers
+				if name != a.config.ServiceName {
+					opts.Names = []string{
 						fmt.Sprintf("^%s$", name),
-					},
+					}
 				}
+				a.updateRequests <- opts
 			}(parts[4])
 		}
 	})

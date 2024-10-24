@@ -36,7 +36,7 @@ type Config struct {
 func NewApp(device tedge.Target, config Config) (*App, error) {
 	serviceTarget := device.Service(config.ServiceName)
 	tedgeOpts := tedge.NewClientConfig()
-	tedgeClient := tedge.NewClient(*serviceTarget, config.ServiceName, tedgeOpts)
+	tedgeClient := tedge.NewClient(device, *serviceTarget, config.ServiceName, tedgeOpts)
 
 	if err := tedgeClient.Connect(); err != nil {
 		return nil, err

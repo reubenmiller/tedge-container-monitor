@@ -28,7 +28,19 @@ func PayloadHealthStatus(payload map[string]any, status string) ([]byte, error) 
 	return b, err
 }
 
+func PayloadRegistration(payload map[string]any, name string, entityType string, parent string) ([]byte, error) {
+	payload["@type"] = entityType
+	payload["name"] = name
+	if parent != "" {
+		payload["@parent"] = parent
+	}
+	b, err := json.Marshal(payload)
+	return b, err
+}
+
 type Client struct {
+	Parent           Target
+	ServiceName      string
 	Client           mqtt.Client
 	Target           Target
 	CumulocityClient *c8y.Client
@@ -55,7 +67,7 @@ func NewClientConfig() *ClientConfig {
 	}
 }
 
-func NewClient(target Target, serviceName string, config *ClientConfig) *Client {
+func NewClient(parent Target, target Target, serviceName string, config *ClientConfig) *Client {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.MqttHost, config.MqttPort))
 	opts.SetClientID(serviceName)
@@ -75,11 +87,28 @@ func NewClient(target Target, serviceName string, config *ClientConfig) *Client 
 		slog.Info("MQTT Client is disconnected.", "err", err)
 	})
 
-	if config.OnConnection != nil {
-		opts.SetOnConnectHandler(func(c mqtt.Client) {
+	opts.SetOnConnectHandler(func(c mqtt.Client) {
+		if config.OnConnection != nil {
 			config.OnConnection()
-		})
-	}
+		}
+
+		// TODO: Find a cleaner way to prevent a race condition between
+		// the registration message and the health/status
+		// Maybe the connect() function logic should be moved here instead
+		time.Sleep(500 * time.Millisecond)
+		payload, err := PayloadHealthStatus(map[string]any{}, StatusUp)
+		if err != nil {
+			return
+		}
+		topic := GetHealthTopic(target)
+		tok := c.Publish(topic, 1, true, payload)
+		<-tok.Done()
+		if err := tok.Error(); err != nil {
+			slog.Warn("Failed to publish health message.", "err", err)
+			return
+		}
+		slog.Info("Published health message.", "topic", topic, "payload", payload)
+	})
 
 	client := mqtt.NewClient(opts)
 
@@ -91,7 +120,9 @@ func NewClient(target Target, serviceName string, config *ClientConfig) *Client 
 	slog.Info("MQTT Client options.", "clientID", opts.ClientID)
 
 	c := &Client{
+		ServiceName:      serviceName,
 		Client:           client,
+		Parent:           parent,
 		Target:           target,
 		CumulocityClient: c8yclient,
 		Entities:         make(map[string]any),
@@ -133,7 +164,7 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	payload, err := PayloadHealthStatus(map[string]any{}, StatusUp)
+	payload, err := PayloadRegistration(map[string]any{}, c.ServiceName, "service", c.Parent.TopicID)
 	if err != nil {
 		return err
 	}

@@ -187,6 +187,7 @@ func (c *Client) Connect() error {
 
 // Delete a Cumulocity Managed object by External ID
 func (c *Client) DeleteCumulocityManagedObject(target Target) (bool, error) {
+	slog.Info("Deleting service by external ID.", "name", target.ExternalID())
 	extID, resp, err := c.CumulocityClient.Identity.GetExternalID(context.Background(), "c8y_Serial", target.ExternalID())
 
 	if err != nil {

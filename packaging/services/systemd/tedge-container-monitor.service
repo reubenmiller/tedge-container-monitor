@@ -7,7 +7,7 @@ EnvironmentFile=-/etc/tedge-container-monitor/env
 ExecStart=/usr/bin/tedge-container-monitor run
 User=root
 Restart=always
-RestartSec=30
+RestartSec=5
 ExecReload=/usr/bin/kill -HUP $MAINPID
 
 [Install]

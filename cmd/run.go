@@ -4,6 +4,7 @@ Copyright © 2024 thin-edge.io <info@thin-edge.io>
 package cmd
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -44,7 +45,9 @@ to the thin-edge.io interface.
 		device := tedge.NewTarget(config.TopicRoot, config.TopicID)
 		device.CloudIdentity = config.DeviceID
 		application, err := app.NewApp(*device, app.Config{
-			ServiceName: config.ServiceName,
+			ServiceName:     config.ServiceName,
+			EnableMetrics:   false,
+			DeleteFromCloud: true,
 		})
 		if err != nil {
 			return err
@@ -62,45 +65,24 @@ to the thin-edge.io interface.
 			return application.Update(config.FilterOptions)
 		}
 
-		if err := application.Subscribe(); err != nil {
-			slog.Error("Failed to subscribe to commands.", "err", err)
-			return err
-		}
+		// if err := application.Subscribe(); err != nil {
+		// 	slog.Error("Failed to subscribe to commands.", "err", err)
+		// 	return err
+		// }
 
 		if err := application.Update(config.FilterOptions); err != nil {
 			slog.Warn("Failed to update container state.", "err", err)
 		}
 
-		if config.Interval < MinimumPollingInterval {
-			slog.Warn("Interval is set too low. Using minium polling interval instead.", "old", config.Interval, "new", MinimumPollingInterval)
-			config.Interval = MinimumPollingInterval
-		}
-
-		// done := make(chan struct{})
-
-		// Background poller
-
-		// Wait for termination signal
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-		ticker := time.NewTicker(config.Interval)
-	out:
-		for {
-			select {
-			case <-stop:
-				slog.Info("Received stop signal")
-				break out
-			case <-ticker.C:
-				slog.Info("Updating container status")
-				if err := application.Update(config.FilterOptions); err != nil {
-					slog.Warn("Failed to update container state.", "err", err)
-				}
-			}
-		}
-
+		// Start background monitor
+		ctx, cancel := context.WithCancel(context.Background())
+		go application.Monitor(ctx, container.FilterOptions{})
+		<-stop
+		cancel()
 		application.Stop(false)
-
 		slog.Info("Shutting down...")
 		return nil
 	},

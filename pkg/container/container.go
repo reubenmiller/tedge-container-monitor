@@ -10,12 +10,13 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-units"
 )
@@ -101,7 +102,7 @@ type Container struct {
 	Labels map[string]string `json:"-"`
 }
 
-func NewContainerFromDockerContainer(item *types.Container) Container {
+func NewContainerFromDockerContainer(item *types.Container) TedgeContainer {
 	container := Container{
 		Id:          item.ID,
 		Name:        ConvertName(item.Names),
@@ -137,7 +138,22 @@ func NewContainerFromDockerContainer(item *types.Container) Container {
 			container.NetworkIDs = append(container.NetworkIDs, v.NetworkID)
 		}
 	}
-	return container
+
+	containerType := ContainerType
+	// Set service type. A docker compose project is a "container-group"
+	if _, ok := item.Labels["com.docker.compose.project"]; ok {
+		containerType = ContainerGroupType
+	}
+
+	return TedgeContainer{
+		Name: container.GetName(),
+		Time: JSONTime{
+			Time: time.Now(),
+		},
+		Status:      ConvertToTedgeStatus(item.State),
+		ServiceType: containerType,
+		Container:   container,
+	}
 }
 
 func (c *Container) GetName() string {
@@ -226,35 +242,54 @@ type ContainerTelemetryMessage struct {
 }
 
 type ContainerStats struct {
-	Cpu    float32 `json:"cpu"`
-	Memory float32 `json:"memory"`
-	NetIO  float32 `json:"netio"`
+	Cpu    uint64 `json:"cpu"`
+	Memory uint64 `json:"memory"`
+	NetIO  uint64 `json:"netio"`
 }
 
-func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (map[string]any, error) {
+func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (*ContainerTelemetryMessage, error) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	containerStats := &Stats{
+		StatsEntry: StatsEntry{
+			Container: containerID,
+		},
+	}
+
+	// Start collecting statistics
+	collect(ctx, containerStats, c.Client, false, &wg)
+	wg.Wait()
+
+	s := containerStats.GetStatistics()
+	slog.Info("Stats.", "memPerc", s.MemoryPercentage, "cpuPerc", s.CPUPercentage, "networkIO", s.NetworkTx)
+
 	resp, err := c.Client.ContainerStatsOneShot(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
 
-	stats := make(map[string]any)
-	decode := json.NewDecoder(resp.Body)
-	err = decode.Decode(&stats)
-
-	// b, err := io.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// res := gjson.ParseBytes(b)
+	statsResponse := &container.StatsResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&statsResponse); err != nil {
+		return nil, err
+	}
 
 	// See https://github.com/docker/cli/blob/master/cli/command/container/stats_helpers.go#L105
 	// https://github.com/docker/cli/blob/062eecf14af34d7295da16c23c2578fcf4aa0196/cli/command/container/stats_helpers.go#L70
-	// ContainerTelemetryMessage{
-	// 	Container: ContainerStats{
-	// 		Cpu: res.Get("MemoryStats.Limit"),
-	// 		Memory: res.Get("MemoryStats.Limit"),
-	// 	},
-	// }
+	// https://stackoverflow.com/questions/30271942/get-docker-container-cpu-usage-as-percentage
+	txBytes := uint64(0)
+	for _, netw := range statsResponse.Networks {
+		txBytes += netw.TxBytes
+	}
+
+	stats := &ContainerTelemetryMessage{
+		Container: ContainerStats{
+			Cpu:    statsResponse.CPUStats.SystemUsage,
+			Memory: statsResponse.MemoryStats.Usage,
+			NetIO:  txBytes,
+		},
+	}
+
 	return stats, err
 }
 
@@ -271,6 +306,19 @@ type FilterOptions struct {
 
 func (fo FilterOptions) IsEmpty() bool {
 	return len(fo.Names) == 0 && len(fo.Labels) == 0 && len(fo.IDs) == 0
+}
+
+func (c *ContainerClient) GetContainer(ctx context.Context, containerID string) (*TedgeContainer, error) {
+	containers, err := c.List(ctx, FilterOptions{
+		IDs: []string{containerID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(containers) == 0 {
+		return nil, fmt.Errorf("container not found")
+	}
+	return &containers[0], nil
 }
 
 func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]TedgeContainer, error) {
@@ -312,23 +360,9 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 		listOptions.Filters = filters.NewArgs(filterValues...)
 	}
 
-	timestamp := JSONTime{
-		Time: time.Now(),
-	}
-
 	containers, err := c.Client.ContainerList(ctx, listOptions)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO: Is this needed, as the docker ps -a list seems to list the NetworkMode as the "network"
-	networks, err := c.Client.NetworkList(ctx, network.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	networkIndex := make(map[string]int)
-	for i, netw := range networks {
-		networkIndex[netw.ID] = i
 	}
 
 	// Pre-compile regular expressions
@@ -343,26 +377,7 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 
 	items := make([]TedgeContainer, 0, len(containers))
 	for _, i := range containers {
-		container := NewContainerFromDockerContainer(&i)
-		item := TedgeContainer{
-			Name:        container.GetName(),
-			Time:        timestamp,
-			Status:      ConvertToTedgeStatus(i.State),
-			ServiceType: ContainerType,
-			Container:   container,
-		}
-
-		for _, netID := range container.NetworkIDs {
-			if netIdx, ok := networkIndex[netID]; ok {
-				item.Container.Networks = networks[netIdx].Name
-				break
-			}
-		}
-
-		// Set service type. A docker compose project is a "container-group"
-		if _, ok := i.Labels["com.docker.compose.project"]; ok {
-			item.ServiceType = ContainerGroupType
-		}
+		item := NewContainerFromDockerContainer(&i)
 
 		// Apply client side filters
 		if len(options.Types) > 0 {
@@ -399,4 +414,8 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 	}
 
 	return items, nil
+}
+
+func (c *ContainerClient) MonitorEvents(ctx context.Context) (<-chan events.Message, <-chan error) {
+	return c.Client.Events(context.Background(), events.ListOptions{})
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -36,6 +37,16 @@ to quickly create a Cobra application.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	args := os.Args
+	name := filepath.Base(args[0])
+	switch name {
+	case "container", "container-group":
+		slog.Debug("Calling as a software management plugin.", "name", name, "args", args)
+		rootCmd.SetArgs(append([]string{name}, args[1:]...))
+	default:
+		slog.Debug("Using subcommands.", "args", args)
+	}
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

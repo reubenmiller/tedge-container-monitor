@@ -92,6 +92,10 @@ nfpms:
       postremove: ./packaging/scripts/post-remove
 
     contents:
+      - src: /usr/bin/tedge-container-monitor
+        dst: /etc/tedge/sm-plugins/container
+        type: symlink
+
       # Services
       - src: ./packaging/services/systemd/tedge-container-monitor.service
         dst: /usr/lib/systemd/system/tedge-container-monitor.service

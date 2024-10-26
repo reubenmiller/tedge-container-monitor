@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/go-units"
 )
 
@@ -319,6 +320,30 @@ func (c *ContainerClient) GetContainer(ctx context.Context, containerID string) 
 		return nil, fmt.Errorf("container not found")
 	}
 	return &containers[0], nil
+}
+
+// Stop and remove a container
+// Don't fail if the container does not exist
+func (c *ContainerClient) StopRemoveContainer(ctx context.Context, containerID string) error {
+	err := c.Client.ContainerStop(ctx, containerID, container.StopOptions{})
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			slog.Info("Container does not exist, so nothing to stop")
+			return nil
+		}
+		return err
+	}
+	err = c.Client.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		RemoveVolumes: false,
+		RemoveLinks:   false,
+	})
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			slog.Info("Container does not exist, so nothing to stop")
+			return nil
+		}
+	}
+	return err
 }
 
 func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]TedgeContainer, error) {

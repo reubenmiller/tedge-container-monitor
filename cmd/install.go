@@ -95,6 +95,8 @@ var installCmd = &cobra.Command{
 			slog.Info("Create default network.", "id", netwResp.ID)
 		}
 
+		//
+		// Check and pull image if it is not present
 		images, err := cli.Client.ImageList(ctx, image.ListOptions{
 			Filters: filters.NewArgs(filters.Arg("reference", imageRef)),
 		})
@@ -114,6 +116,15 @@ var installCmd = &cobra.Command{
 			slog.Info("Image already exists.", "ref", imageRef, "id", images[0].ID, "tags", images[0].RepoTags)
 		}
 
+		//
+		// Stop/remove any existing images with the same name
+		if err := cli.StopRemoveContainer(ctx, containerName); err != nil {
+			slog.Warn("Could not stop and remove the existing container.", "err", err)
+			return err
+		}
+
+		//
+		// Create new container
 		containerConfig := &containerSDK.Config{
 			Image:  imageRef,
 			Labels: map[string]string{},

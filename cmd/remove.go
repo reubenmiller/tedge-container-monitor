@@ -7,8 +7,6 @@ import (
 	"context"
 	"log/slog"
 
-	containerSDK "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/errdefs"
 	"github.com/spf13/cobra"
 	"github.com/thin-edge/tedge-container-monitor/pkg/container"
 )
@@ -35,28 +33,7 @@ var removeCmd = &cobra.Command{
 			return err
 		}
 
-		err = cli.Client.ContainerStop(ctx, containerName, containerSDK.StopOptions{})
-		if err != nil {
-			if errdefs.IsNotFound(err) {
-				slog.Info("Container does not exist, so nothing to stop")
-				return nil
-			}
-			slog.Warn("Could not stop the container.", "err", err)
-			return err
-		}
-		err = cli.Client.ContainerRemove(ctx, containerName, containerSDK.RemoveOptions{
-			RemoveVolumes: false,
-			RemoveLinks:   false,
-		})
-		if err != nil {
-			if errdefs.IsNotFound(err) {
-				slog.Info("Container does not exist, so nothing to stop")
-				return nil
-			}
-			slog.Warn("Could not remove the container.", "err", err)
-		}
-
-		return err
+		return cli.StopRemoveContainer(ctx, containerName)
 	},
 }
 

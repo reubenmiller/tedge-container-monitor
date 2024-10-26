@@ -134,6 +134,7 @@ var installCmd = &cobra.Command{
 			ctx,
 			containerConfig,
 			&containerSDK.HostConfig{
+				PublishAllPorts: true,
 				RestartPolicy: containerSDK.RestartPolicy{
 					Name:              containerSDK.RestartPolicyOnFailure,
 					MaximumRetryCount: 5,

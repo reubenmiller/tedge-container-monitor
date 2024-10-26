@@ -82,18 +82,32 @@ var installCmd = &cobra.Command{
 		}
 
 		// Install shared network
-		netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})
-
-		if errdefs.IsConflict(err) {
-			slog.Info("Network already exists.", "id", DefaultNetworkName)
-		} else {
-			if err != nil {
-				return nil
+		netw, err := cli.Client.NetworkInspect(ctx, DefaultNetworkName, network.InspectOptions{})
+		if err != nil {
+			if !errdefs.IsNotFound(err) {
+				return err
 			}
+			// Create network
+			netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})
+			if err != nil {
+				return err
+			}
+			slog.Info("Created network.", "name", DefaultNetworkName, "id", netwResp.ID)
+		} else {
+			// Network already exists
+			slog.Info("Network already exists.", "name", netw.Name, "id", netw.ID)
 		}
-		if netwResp.ID != "" {
-			slog.Info("Create default network.", "id", netwResp.ID)
-		}
+		// netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})
+
+		// if errdefs.IsConflict(err) {
+		// 	slog.Info("Network already exists.", "id", DefaultNetworkName)
+		// } else if err != nil {
+		// 	slog.Error("Failed to create container network.", "err", err)
+		// 	return err
+		// }
+		// if netwResp.ID != "" {
+		// 	slog.Info("Create default network.", "id", netwResp.ID)
+		// }
 
 		//
 		// Check and pull image if it is not present

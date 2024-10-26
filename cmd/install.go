@@ -5,10 +5,11 @@ package cmd
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 
 	containerSDK "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -28,6 +29,10 @@ type installOptions struct {
 	File          string
 }
 
+type ImageResponse struct {
+	Stream string `json:"stream"`
+}
+
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install <MODULE_NAME>",
@@ -38,9 +43,6 @@ var installCmd = &cobra.Command{
 		slog.Info("Executing", "cmd", cmd.CalledAs(), "args", args)
 		containerName := args[0]
 		imageRef := installCmdOptions.ModuleVersion
-		if installCmdOptions.File != "" {
-			return fmt.Errorf("TODO: not implemented")
-		}
 
 		cli, err := container.NewContainerClient()
 		if err != nil {
@@ -48,6 +50,36 @@ var installCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
+
+		if installCmdOptions.File != "" {
+			slog.Info("Loading image from file.", "file", installCmdOptions.File)
+			file, err := os.Open(installCmdOptions.File)
+			if err != nil {
+				return err
+			}
+
+			imageResp, err := cli.Client.ImageLoad(ctx, file, true)
+			if err != nil {
+				return err
+			}
+			defer imageResp.Body.Close()
+			if imageResp.JSON {
+				b, err := io.ReadAll(imageResp.Body)
+				if err != nil {
+					return nil
+				}
+				imageDetails := &ImageResponse{}
+				if err := json.Unmarshal(b, &imageDetails); err != nil {
+					return err
+				}
+
+				if strings.HasPrefix(imageDetails.Stream, "Loaded image: ") {
+					imageRef = strings.TrimPrefix(imageDetails.Stream, "Loaded image: ")
+					slog.Info("Using imageRef from loaded image.", "name", imageRef)
+				}
+				slog.Info("Loaded image.", "stream", imageDetails.Stream)
+			}
+		}
 
 		// Install shared network
 		netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})

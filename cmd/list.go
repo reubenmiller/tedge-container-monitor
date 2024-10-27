@@ -26,7 +26,7 @@ var listCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		containers, err := cli.List(ctx, config.FilterOptions)
+		containers, err := cli.List(ctx, config.GetFilterOptions())
 		if err != nil {
 			return err
 		}

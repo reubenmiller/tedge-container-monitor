@@ -8,15 +8,21 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // Build data
 var buildVersion string
 var buildBranch string
 
-var logLevel string
+var rootConfig RootConfig
+
+type RootConfig struct {
+	ConfigFile string
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -54,7 +60,9 @@ func Execute() {
 }
 
 func SetLogLevel() error {
-	switch logLevel {
+	value := strings.ToLower(viper.GetString("log_level"))
+	slog.Info("Setting log level.", "new", value)
+	switch value {
 	case "info":
 		slog.SetLogLoggerLevel(slog.LevelInfo)
 	case "debug":
@@ -67,6 +75,35 @@ func SetLogLevel() error {
 	return nil
 }
 
+func initConfig() {
+	if rootConfig.ConfigFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(rootConfig.ConfigFile)
+	} else {
+		// Find home directory.
+		home, err := os.UserHomeDir()
+		cobra.CheckErr(err)
+
+		// Search config in home directory with name ".cobra" (without extension).
+		viper.AddConfigPath(home)
+		viper.SetConfigType("yaml")
+		viper.SetConfigName(".tedge-container")
+	}
+
+	viper.SetEnvPrefix("CONTAINER")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	if err := viper.ReadInConfig(); err == nil {
+		slog.Info("Using config file", "path", viper.ConfigFileUsed())
+	}
+}
+
 func init() {
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "Log level")
+	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().String("log-level", "info", "Log level")
+	rootCmd.PersistentFlags().StringVarP(&rootConfig.ConfigFile, "config", "c", "", "Configuration file")
+
+	// viper.Bind
+	viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 }

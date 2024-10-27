@@ -39,7 +39,7 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
 
 * [ ] Publish telemetry data (in same format at docker stats)
 
-* [ ] Read config from file and environment variables
+* [x] Read config from file and environment variables
 
 * [ ] Support using certificates to interact with:
     * [ ] MQTT broker

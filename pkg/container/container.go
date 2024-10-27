@@ -204,6 +204,7 @@ func socketExists(p string) bool {
 
 func findContainerEngineSocket() (socketAddr string) {
 	containerSockets := []string{
+		"unix:///var/run/docker.sock",
 		"unix:///run/podman/podman.sock",
 	}
 

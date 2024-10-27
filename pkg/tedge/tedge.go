@@ -58,15 +58,6 @@ type ClientConfig struct {
 	OnConnection func()
 }
 
-func NewClientConfig() *ClientConfig {
-	return &ClientConfig{
-		MqttHost: "127.0.0.1",
-		MqttPort: 1883,
-		C8yHost:  "127.0.0.1",
-		C8yPort:  8001,
-	}
-}
-
 func NewClient(parent Target, target Target, serviceName string, config *ClientConfig) *Client {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.MqttHost, config.MqttPort))

@@ -35,11 +35,22 @@ type Config struct {
 	EnableMetrics      bool
 	EnableEngineEvents bool
 	DeleteFromCloud    bool
+
+	MQTTHost string
+	MQTTPort uint16
+
+	CumulocityHost string
+	CumulocityPort uint16
 }
 
 func NewApp(device tedge.Target, config Config) (*App, error) {
 	serviceTarget := device.Service(config.ServiceName)
-	tedgeOpts := tedge.NewClientConfig()
+	tedgeOpts := &tedge.ClientConfig{
+		MqttHost: config.MQTTHost,
+		MqttPort: config.MQTTPort,
+		C8yHost:  config.CumulocityHost,
+		C8yPort:  config.CumulocityPort,
+	}
 	tedgeClient := tedge.NewClient(device, *serviceTarget, config.ServiceName, tedgeOpts)
 
 	containerClient, err := container.NewContainerClient()

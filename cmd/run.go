@@ -37,6 +37,18 @@ func (c *Config) GetServiceName() string {
 	return viper.GetString("monitor.service_name")
 }
 
+func (c *Config) GetKeyFile() string {
+	return viper.GetString("monitor.client.key")
+}
+
+func (c *Config) GetCertificateFile() string {
+	return viper.GetString("monitor.client.cert_file")
+}
+
+func (c *Config) GetCAFile() string {
+	return viper.GetString("monitor.client.ca_file")
+}
+
 func (c *Config) GetTopicRoot() string {
 	return viper.GetString("monitor.mqtt.topic_root")
 }
@@ -56,6 +68,7 @@ func (c *Config) MetricsEnabled() bool {
 func (c *Config) EngineEventsEnabled() bool {
 	return viper.GetBool("monitor.events.enabled")
 }
+
 func (c *Config) DeleteFromCloud() bool {
 	return viper.GetBool("monitor.delete_from_cloud.enabled")
 }
@@ -136,6 +149,10 @@ to the thin-edge.io interface.
 			MQTTPort:       config.GetMQTTPort(),
 			CumulocityHost: config.GetCumulocityHost(),
 			CumulocityPort: config.GetCumulocityPort(),
+
+			KeyFile:  config.GetKeyFile(),
+			CertFile: config.GetCertificateFile(),
+			CAFile:   config.GetCAFile(),
 		})
 		if err != nil {
 			return err
@@ -228,4 +245,9 @@ func init() {
 	viper.SetDefault("monitor.mqtt.client.port", "1883")
 	viper.SetDefault("monitor.c8y.proxy.client.host", "127.0.0.1")
 	viper.SetDefault("monitor.c8y.proxy.client.port", "8001")
+
+	// TLS
+	viper.SetDefault("monitor.client.key", "")
+	viper.SetDefault("monitor.client.cert_file", "")
+	viper.SetDefault("monitor.client.ca_file", "")
 }

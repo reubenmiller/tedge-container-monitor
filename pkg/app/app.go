@@ -31,6 +31,11 @@ type App struct {
 type Config struct {
 	ServiceName string
 
+	// TLS
+	KeyFile  string
+	CertFile string
+	CAFile   string
+
 	// Feature flags
 	EnableMetrics      bool
 	EnableEngineEvents bool
@@ -50,6 +55,9 @@ func NewApp(device tedge.Target, config Config) (*App, error) {
 		MqttPort: config.MQTTPort,
 		C8yHost:  config.CumulocityHost,
 		C8yPort:  config.CumulocityPort,
+		CertFile: config.CertFile,
+		KeyFile:  config.KeyFile,
+		CAFile:   config.CAFile,
 	}
 	tedgeClient := tedge.NewClient(device, *serviceTarget, config.ServiceName, tedgeOpts)
 

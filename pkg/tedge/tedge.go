@@ -191,12 +191,10 @@ func (c *Client) DeleteCumulocityManagedObject(target Target) (bool, error) {
 	extID, resp, err := c.CumulocityClient.Identity.GetExternalID(context.Background(), "c8y_Serial", target.ExternalID())
 
 	if err != nil {
-		switch resp.StatusCode() {
-		case http.StatusNotFound:
+		if resp != nil && resp.StatusCode() == http.StatusNotFound {
 			return false, nil
-		default:
-			return false, err
 		}
+		return false, err
 	}
 
 	if _, err := c.CumulocityClient.Inventory.Delete(context.Background(), extID.ManagedObject.ID); err != nil {

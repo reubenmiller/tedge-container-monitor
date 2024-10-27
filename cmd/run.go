@@ -45,9 +45,10 @@ to the thin-edge.io interface.
 		device := tedge.NewTarget(config.TopicRoot, config.TopicID)
 		device.CloudIdentity = config.DeviceID
 		application, err := app.NewApp(*device, app.Config{
-			ServiceName:     config.ServiceName,
-			EnableMetrics:   false,
-			DeleteFromCloud: true,
+			ServiceName:        config.ServiceName,
+			EnableMetrics:      false,
+			DeleteFromCloud:    true,
+			EnableEngineEvents: true,
 		})
 		if err != nil {
 			return err

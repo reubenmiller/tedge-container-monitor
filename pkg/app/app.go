@@ -164,6 +164,18 @@ func mustMarshalJSON(v any) []byte {
 	return b
 }
 
+func getEventAttributes(attr map[string]string, props ...string) []string {
+	out := make([]string, 0)
+	for _, prop := range props {
+		value := ""
+		if v, ok := attr[prop]; ok {
+			value = v
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
 func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions) error {
 	evtCh, errCh := a.ContainerClient.MonitorEvents(ctx)
 
@@ -176,8 +188,20 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 			switch evt.Type {
 			case events.ContainerEventType:
 				payload := make(map[string]any)
-				if v, ok := ContainerEventText[evt.Action]; ok {
-					payload["text"] = fmt.Sprintf("%s %s", "container", v)
+				if action, ok := ContainerEventText[evt.Action]; ok {
+					props := getEventAttributes(evt.Actor.Attributes, "name", "image", "com.docker.compose.project")
+					name := props[0]
+					image := props[1]
+					project := props[2]
+					if name != "" && image != "" {
+						if project != "" {
+							payload["text"] = fmt.Sprintf("%s %s. project=%s, name=%s, image=%s", "container", action, project, name, image)
+						} else {
+							payload["text"] = fmt.Sprintf("%s %s. name=%s, image=%s", "container", action, name, image)
+						}
+					} else {
+						payload["text"] = fmt.Sprintf("%s %s", "container", action)
+					}
 					payload["containerID"] = evt.Actor.ID
 					payload["attributes"] = evt.Actor.Attributes
 				}

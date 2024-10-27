@@ -35,19 +35,25 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
 * [x] Add subcommand for
     * [x] container sm-plugin
 
-* [ ] Fix container id to container-group service lookup (triggered from the system events)
-
 * [ ] Publish telemetry data (in same format at docker stats)
 
 * [x] Read config from file and environment variables
 
-* [ ] Support using certificates to interact with:
-    * [ ] MQTT broker
-    * [ ] Cumulocity Local Proxy
+* [x] Support using certificates to interact with:
+    * [x] MQTT broker
+    * [x] Cumulocity Local Proxy
+
+* [ ] Cleanup code
+    * [ ] Removal all TODOs
+    * [ ] Rearrange logic (currently it is too nested)
 
 ### Phase 2
 
+* [ ] Fix container id to container-group service lookup (triggered from the system events)
+
 * [ ] Support fetching container logs
+
+* [ ] Support start/stop/restart/pause/unpause container
 
 * [ ] Support executing custom command in container?
 

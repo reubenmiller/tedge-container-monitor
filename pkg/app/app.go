@@ -193,9 +193,10 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 					slog.Info("Container removed/destroyed", "container", evt.Actor.ID, "attributes", evt.Actor.Attributes)
 					// TODO: Trigger a removal instead of checking the whole state
 					// TODO: Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
-					if containerName, ok := evt.Actor.Attributes["name"]; ok {
-						a.Deregister(containerName)
-					}
+					a.Update(container.FilterOptions{})
+					// if containerName, ok := evt.Actor.Attributes["name"]; ok {
+					// 	a.Deregister(containerName)
+					// }
 				}
 
 				if a.config.EnableEngineEvents {
@@ -212,7 +213,6 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 			slog.Info("Received error.", "value", err)
 		}
 	}
-	return nil
 }
 
 func (a *App) doUpdate(filterOptions container.FilterOptions) error {

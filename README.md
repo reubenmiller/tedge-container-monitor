@@ -32,6 +32,11 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
 
 * [x] Support excluding containers by name
 
+* [x] Add subcommand for
+    * [x] container sm-plugin
+
+* [ ] Fix container id to container-group service lookup (triggered from the system events)
+
 * [ ] Publish telemetry data (in same format at docker stats)
 
 * [ ] Read config from file and environment variables

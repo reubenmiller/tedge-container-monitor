@@ -24,9 +24,10 @@ venv:
   [ -d .venv ] || python3 -m venv .venv
   ./.venv/bin/pip3 install -r tests/requirements.txt
 
-# Build test images
+# Build test images and test artifacts
 build-test:
   docker build -t {{IMAGE}} -f ./test-images/{{IMAGE_SRC}}/Dockerfile .
+  ./tests/data/apps/build.sh
 
 # Run tests
 test *args='':

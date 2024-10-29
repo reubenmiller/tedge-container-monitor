@@ -3,5 +3,19 @@ tedge-container-monitor
 output/
 dist/
 
+# python
+*.pyc
+.venv
+__pycache__
+.pytest_cache
+
+# tests
+log.html
+output.xml
+report.html
+interactive_console_output.xml
+tests/data/apps/app1.tar.gz
+tests/data/apps/app3.tar
+
 # MacOS
 .DS_Store

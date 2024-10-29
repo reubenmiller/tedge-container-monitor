@@ -2,10 +2,14 @@ package tedge
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -49,27 +53,94 @@ type Client struct {
 	mutex    sync.RWMutex
 }
 
+func fileExists(filePath string) bool {
+	_, error := os.Stat(filePath)
+	//return !os.IsNotExist(err)
+	return !errors.Is(error, os.ErrNotExist)
+}
+
+func NewTLSConfig(keyFile string, certFile string, caFile string) *tls.Config {
+	// Import trusted certificates from CAfile.pem.
+	// Alternatively, manually add CA certificates to
+	// default openssl CA bundle.
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
+	pemCerts, err := os.ReadFile(caFile)
+	if err == nil {
+		rootCAs.AppendCertsFromPEM(pemCerts)
+	}
+
+	// Import client certificate/key pair
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		panic(err)
+	}
+
+	// Just to print out the client certificate..
+	cert.Leaf, err = x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		panic(err)
+	}
+
+	// Create tls.Config with desired tls properties
+	return &tls.Config{
+		// RootCAs = certs used to verify server cert.
+		RootCAs: rootCAs,
+		// ClientAuth = whether to request cert from server.
+		// Since the server is set up for SSL, this happens
+		// anyways.
+		ClientAuth: tls.NoClientCert,
+		// ClientCAs = certs used to validate client cert.
+		ClientCAs: nil,
+		// InsecureSkipVerify = verify that cert contents
+		// match server. IP matches what is in cert etc.
+		InsecureSkipVerify: false,
+		// Certificates = list of certs client sends to server.
+		Certificates: []tls.Certificate{cert},
+	}
+}
+
 type ClientConfig struct {
 	MqttHost string
 	MqttPort uint16
-	C8yHost  string
-	C8yPort  uint16
+
+	CertFile string
+	KeyFile  string
+	CAFile   string
+
+	C8yHost string
+	C8yPort uint16
 
 	OnConnection func()
 }
 
-func NewClientConfig() *ClientConfig {
-	return &ClientConfig{
-		MqttHost: "127.0.0.1",
-		MqttPort: 1883,
-		C8yHost:  "127.0.0.1",
-		C8yPort:  8001,
+func CumulocityClientFromConfig(useCerts bool, config *ClientConfig) *c8y.Client {
+	var httpClient *http.Client
+	c8yURL := fmt.Sprintf("http://%s:%d/c8y", config.C8yHost, config.C8yPort)
+	if useCerts {
+		tlsconfig := NewTLSConfig(config.KeyFile, config.CertFile, config.CAFile)
+		transport := &http.Transport{TLSClientConfig: tlsconfig}
+		httpClient = &http.Client{Transport: transport}
+		c8yURL = fmt.Sprintf("https://%s:%d/c8y", config.C8yHost, config.C8yPort)
 	}
+	return c8y.NewClient(httpClient, c8yURL, "", "", "", true)
 }
 
 func NewClient(parent Target, target Target, serviceName string, config *ClientConfig) *Client {
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.MqttHost, config.MqttPort))
+	useCerts := fileExists(config.KeyFile) && fileExists(config.CertFile)
+	if useCerts {
+		slog.Info("Using client certificates to connect to thin-edge.io services")
+		opts.AddBroker(fmt.Sprintf("ssl://%s:%d", config.MqttHost, config.MqttPort))
+		tlsconfig := NewTLSConfig(config.KeyFile, config.CertFile, config.CAFile)
+		opts.SetTLSConfig(tlsconfig)
+	} else {
+		opts.AddBroker(fmt.Sprintf("tcp://%s:%d", config.MqttHost, config.MqttPort))
+	}
+
 	opts.SetClientID(serviceName)
 	opts.SetClientID(fmt.Sprintf("%s#%s", serviceName, target.Topic()))
 	opts.SetCleanSession(true)
@@ -112,11 +183,7 @@ func NewClient(parent Target, target Target, serviceName string, config *ClientC
 
 	client := mqtt.NewClient(opts)
 
-	// TODO: Read port and host from settings
-	// TODO: Support local certificate based auth
-	c8yURL := fmt.Sprintf("http://%s:%d/c8y", config.C8yHost, config.C8yPort)
-	c8yclient := c8y.NewClient(nil, c8yURL, "", "", "", true)
-
+	c8yclient := CumulocityClientFromConfig(useCerts, config)
 	slog.Info("MQTT Client options.", "clientID", opts.ClientID)
 
 	c := &Client{
@@ -187,15 +254,14 @@ func (c *Client) Connect() error {
 
 // Delete a Cumulocity Managed object by External ID
 func (c *Client) DeleteCumulocityManagedObject(target Target) (bool, error) {
+	slog.Info("Deleting service by external ID.", "name", target.ExternalID())
 	extID, resp, err := c.CumulocityClient.Identity.GetExternalID(context.Background(), "c8y_Serial", target.ExternalID())
 
 	if err != nil {
-		switch resp.StatusCode() {
-		case http.StatusNotFound:
+		if resp != nil && resp.StatusCode() == http.StatusNotFound {
 			return false, nil
-		default:
-			return false, err
 		}
+		return false, err
 	}
 
 	if _, err := c.CumulocityClient.Inventory.Delete(context.Background(), extID.ManagedObject.ID); err != nil {

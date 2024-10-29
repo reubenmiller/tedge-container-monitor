@@ -1,0 +1,25 @@
+log_level: info
+monitor:
+  service_name: tedge-container-monitor
+  filter:
+    include:
+      names: []
+      ids: []
+      labels: []
+      types: []
+    exclude:
+      names: ["^buildx.*"]
+      labels: []
+
+  # mqtt:
+  #   topic_root: te
+  #   device_topic_id: device/main//
+
+  metrics:
+    enabled: false
+  
+  events:
+    enabled: true
+
+  delete_from_cloud:
+    enabled: true

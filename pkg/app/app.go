@@ -9,13 +9,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/events"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/thin-edge/tedge-container-monitor/pkg/container"
 	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
 )
 
 type App struct {
-	client *tedge.Client
+	client          *tedge.Client
+	ContainerClient *container.ContainerClient
 
 	Device *tedge.Target
 
@@ -29,37 +31,71 @@ type App struct {
 type Config struct {
 	ServiceName string
 
+	// TLS
+	KeyFile  string
+	CertFile string
+	CAFile   string
+
 	// Feature flags
-	EnableMetrics bool
+	EnableMetrics      bool
+	EnableEngineEvents bool
+	DeleteFromCloud    bool
+
+	MQTTHost string
+	MQTTPort uint16
+
+	CumulocityHost string
+	CumulocityPort uint16
 }
 
 func NewApp(device tedge.Target, config Config) (*App, error) {
 	serviceTarget := device.Service(config.ServiceName)
-	tedgeOpts := tedge.NewClientConfig()
+	tedgeOpts := &tedge.ClientConfig{
+		MqttHost: config.MQTTHost,
+		MqttPort: config.MQTTPort,
+		C8yHost:  config.CumulocityHost,
+		C8yPort:  config.CumulocityPort,
+		CertFile: config.CertFile,
+		KeyFile:  config.KeyFile,
+		CAFile:   config.CAFile,
+	}
 	tedgeClient := tedge.NewClient(device, *serviceTarget, config.ServiceName, tedgeOpts)
+
+	containerClient, err := container.NewContainerClient()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := tedgeClient.Connect(); err != nil {
 		return nil, err
 	}
 
 	if tedgeClient.Target.CloudIdentity == "" {
-		slog.Info("Looking up thin-edge.io Cumulocity ExternalID")
-		if currentUser, _, err := tedgeClient.CumulocityClient.User.GetCurrentUser(context.Background()); err == nil {
-			tedgeClient.Target.CloudIdentity = strings.TrimPrefix(currentUser.Username, "device_")
-			slog.Info("Found Cumulocity ExternalID", "value", tedgeClient.Target.CloudIdentity)
-		} else {
-			slog.Warn("Failed to lookup Cumulocity ExternalID.", "err", err)
+		for {
+			slog.Info("Looking up thin-edge.io Cumulocity ExternalID")
+			if currentUser, _, err := tedgeClient.CumulocityClient.User.GetCurrentUser(context.Background()); err == nil {
+				externalID := strings.TrimPrefix(currentUser.Username, "device_")
+				tedgeClient.Target.CloudIdentity = externalID
+				device.CloudIdentity = externalID
+				slog.Info("Found Cumulocity ExternalID", "value", tedgeClient.Target.CloudIdentity)
+				break
+			} else {
+				slog.Warn("Failed to lookup Cumulocity ExternalID.", "err", err)
+				// retry until it is successful
+				time.Sleep(10 * time.Second)
+			}
 		}
 	}
 
 	application := &App{
-		client:         tedgeClient,
-		Device:         &device,
-		config:         config,
-		updateRequests: make(chan container.FilterOptions),
-		updateResults:  make(chan error),
-		shutdown:       make(chan struct{}),
-		wg:             sync.WaitGroup{},
+		client:          tedgeClient,
+		ContainerClient: containerClient,
+		Device:          &device,
+		config:          config,
+		updateRequests:  make(chan container.FilterOptions),
+		updateResults:   make(chan error),
+		shutdown:        make(chan struct{}),
+		wg:              sync.WaitGroup{},
 	}
 
 	// Start background task to process requests
@@ -131,6 +167,97 @@ func (a *App) Update(filterOptions container.FilterOptions) error {
 	return err
 }
 
+var ContainerEventText = map[events.Action]string{
+	events.ActionCreate:  "created",
+	events.ActionStart:   "started",
+	events.ActionStop:    "stopped",
+	events.ActionDestroy: "destroyed",
+	events.ActionRemove:  "removed",
+	events.ActionDie:     "died",
+	events.ActionPause:   "paused",
+	events.ActionUnPause: "unpaused",
+}
+
+func mustMarshalJSON(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+func getEventAttributes(attr map[string]string, props ...string) []string {
+	out := make([]string, 0)
+	for _, prop := range props {
+		value := ""
+		if v, ok := attr[prop]; ok {
+			value = v
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions) error {
+	evtCh, errCh := a.ContainerClient.MonitorEvents(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Stopping engine monitor")
+			return ctx.Err()
+		case evt := <-evtCh:
+			switch evt.Type {
+			case events.ContainerEventType:
+				payload := make(map[string]any)
+				if action, ok := ContainerEventText[evt.Action]; ok {
+					props := getEventAttributes(evt.Actor.Attributes, "name", "image", "com.docker.compose.project")
+					name := props[0]
+					image := props[1]
+					project := props[2]
+					if name != "" && image != "" {
+						if project != "" {
+							payload["text"] = fmt.Sprintf("%s %s. project=%s, name=%s, image=%s", "container", action, project, name, image)
+						} else {
+							payload["text"] = fmt.Sprintf("%s %s. name=%s, image=%s", "container", action, name, image)
+						}
+					} else {
+						payload["text"] = fmt.Sprintf("%s %s", "container", action)
+					}
+					payload["containerID"] = evt.Actor.ID
+					payload["attributes"] = evt.Actor.Attributes
+				}
+
+				switch evt.Action {
+				case events.ActionCreate:
+					slog.Info("Container created", "container", evt.Actor.ID)
+				case events.ActionStart, events.ActionStop, events.ActionPause, events.ActionUnPause:
+					a.Update(container.FilterOptions{
+						IDs: []string{evt.Actor.ID},
+					})
+				case events.ActionDestroy, events.ActionRemove:
+					slog.Info("Container removed/destroyed", "container", evt.Actor.ID, "attributes", evt.Actor.Attributes)
+					// TODO: Trigger a removal instead of checking the whole state
+					// TODO: Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
+					a.Update(container.FilterOptions{})
+					// if containerName, ok := evt.Actor.Attributes["name"]; ok {
+					// 	a.Deregister(containerName)
+					// }
+				}
+
+				if a.config.EnableEngineEvents {
+					if len(payload) > 0 {
+						if err := a.client.Publish(tedge.GetTopic(a.client.Target, "e", string(evt.Action)), 1, false, mustMarshalJSON(payload)); err != nil {
+							slog.Warn("Failed to publish container event.", "err", err)
+						}
+					}
+				}
+			}
+
+			slog.Info("Received event.", "value", evt)
+		case err := <-errCh:
+			slog.Info("Received error.", "value", err)
+		}
+	}
+}
+
 func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	tedgeClient := a.client
 	entities, err := tedgeClient.GetEntities()
@@ -154,13 +281,8 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		slog.Debug("Entity store.", "key", key)
 	}
 
-	client, err := container.NewContainerClient()
-	if err != nil {
-		return err
-	}
-
 	slog.Info("Reading containers")
-	items, err := client.List(context.Background(), filterOptions)
+	items, err := a.ContainerClient.List(context.Background(), filterOptions)
 	if err != nil {
 		return err
 	}
@@ -236,7 +358,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 	// Update metrics
 	if a.config.EnableMetrics {
 		for _, item := range items {
-			stats, err := client.GetStats(context.Background(), item.Container.Id)
+			stats, err := a.ContainerClient.GetStats(context.Background(), item.Container.Id)
 			if err != nil {
 				slog.Warn("Failed to read container stats", "err", err)
 			} else {
@@ -275,7 +397,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 			// Delay before deleting messages
 			time.Sleep(500 * time.Millisecond)
 			for _, target := range markedForDeletion {
-				slog.Info("Removing stale service", "topic", target.Topic())
+				slog.Info("Removing service from the cloud", "topic", target.Topic())
 
 				// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
 				// Should it try to reconcile with the cloud to delete orphaned services?
@@ -291,5 +413,36 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		}
 	}
 
+	return nil
+}
+
+func (a *App) Deregister(name string) error {
+	slog.Info("Removing service", "name", name)
+	target := a.Device.Service(name)
+
+	// FIXME: Check if sending an empty retain message to the twin topic will recreate
+	if err := a.client.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
+		return err
+	}
+	if err := a.client.DeregisterEntity(*target); err != nil {
+		slog.Warn("Failed to deregister entity.", "err", err)
+	}
+
+	if a.config.DeleteFromCloud {
+		// Delay before deleting messages
+		time.Sleep(500 * time.Millisecond)
+		slog.Info("Removing service from the cloud")
+
+		// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
+		// Should it try to reconcile with the cloud to delete orphaned services?
+		// Delete service directly from Cumulocity using the local Cumulocity Proxy
+		target.CloudIdentity = a.client.Target.CloudIdentity
+		if target.CloudIdentity != "" {
+			// Delay deleting the value
+			if _, err := a.client.DeleteCumulocityManagedObject(*target); err != nil {
+				slog.Warn("Failed to delete managed object.", "err", err)
+			}
+		}
+	}
 	return nil
 }

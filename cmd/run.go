@@ -179,11 +179,6 @@ to the thin-edge.io interface.
 			return application.Update(config.GetFilterOptions())
 		}
 
-		// if err := application.Subscribe(); err != nil {
-		// 	slog.Error("Failed to subscribe to commands.", "err", err)
-		// 	return err
-		// }
-
 		if err := application.Update(config.GetFilterOptions()); err != nil {
 			slog.Warn("Failed to update container state.", "err", err)
 		}

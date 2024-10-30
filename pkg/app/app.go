@@ -280,11 +280,8 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 				case events.ActionDestroy, events.ActionRemove:
 					slog.Info("Container removed/destroyed", "container", evt.Actor.ID, "attributes", evt.Actor.Attributes)
 					// TODO: Trigger a removal instead of checking the whole state
-					// TODO: Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
+					// Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
 					a.Update(container.FilterOptions{})
-					// if containerName, ok := evt.Actor.Attributes["name"]; ok {
-					// 	a.Deregister(containerName)
-					// }
 				}
 
 				if a.config.EnableEngineEvents {
@@ -461,7 +458,6 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 				continue
 			}
 
-			// FIXME: Check if sending an empty retain message to the twin topic will recreate
 			if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
 				return err
 			}
@@ -495,36 +491,5 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		}
 	}
 
-	return nil
-}
-
-func (a *App) Deregister(name string) error {
-	slog.Info("Removing service", "name", name)
-	target := a.Device.Service(name)
-
-	// FIXME: Check if sending an empty retain message to the twin topic will recreate
-	if err := a.client.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
-		return err
-	}
-	if err := a.client.DeregisterEntity(*target); err != nil {
-		slog.Warn("Failed to deregister entity.", "err", err)
-	}
-
-	if a.config.DeleteFromCloud {
-		// Delay before deleting messages
-		time.Sleep(500 * time.Millisecond)
-		slog.Info("Removing service from the cloud")
-
-		// FIXME: How to handle if the device is deregistered locally, but still exists in the cloud?
-		// Should it try to reconcile with the cloud to delete orphaned services?
-		// Delete service directly from Cumulocity using the local Cumulocity Proxy
-		target.CloudIdentity = a.client.Target.CloudIdentity
-		if target.CloudIdentity != "" {
-			// Delay deleting the value
-			if _, err := a.client.DeleteCumulocityManagedObject(*target); err != nil {
-				slog.Warn("Failed to delete managed object.", "err", err)
-			}
-		}
-	}
 	return nil
 }

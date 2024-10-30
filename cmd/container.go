@@ -18,9 +18,6 @@ var containerCmd = &cobra.Command{
 	Use:   "container",
 	Short: "container software management plugin",
 	Long:  `Install/Remove containers via the thin-edge.io software management plugin API`,
-	// Run: func(cmd *cobra.Command, args []string) {
-	// 	fmt.Println("container called")
-	// },
 }
 
 func init() {

@@ -114,7 +114,7 @@ type ClientConfig struct {
 	C8yHost string
 	C8yPort uint16
 
-	OnConnection func()
+	OnConnection func() error
 }
 
 func CumulocityClientFromConfig(useCerts bool, config *ClientConfig) *c8y.Client {
@@ -151,28 +151,46 @@ func NewClient(parent Target, target Target, serviceName string, config *ClientC
 	opts.SetResumeSubs(false)
 	opts.SetKeepAlive(60 * time.Second)
 
-	opts.SetOnConnectHandler(func(c mqtt.Client) {
-		slog.Info("MQTT Client is connected")
-	})
 	opts.SetConnectionLostHandler(func(c mqtt.Client, err error) {
 		slog.Info("MQTT Client is disconnected.", "err", err)
 	})
 
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
+		slog.Info("MQTT Client is connected")
 		if config.OnConnection != nil {
 			config.OnConnection()
 		}
 
-		// TODO: Find a cleaner way to prevent a race condition between
-		// the registration message and the health/status
-		// Maybe the connect() function logic should be moved here instead
-		time.Sleep(500 * time.Millisecond)
-		payload, err := PayloadHealthStatus(map[string]any{}, StatusUp)
+		payload, err := PayloadRegistration(map[string]any{}, serviceName, "service", parent.TopicID)
+		if err != nil {
+			slog.Error("Could not convert payload.", "err", err)
+			return
+		}
+		tok := c.Publish(GetTopicRegistration(target), 1, true, payload)
+		<-tok.Done()
+		if err := tok.Error(); err != nil {
+			slog.Error("Failed to publish registration topic.", "err", err)
+			return
+		}
+		slog.Info("Registered service", "topic", GetTopicRegistration(target))
+
+		// Configure subscriptions
+		subscriptions := make(map[string]byte)
+		subscriptions[target.RootPrefix+"/+/+/+/+"] = 1
+		subscriptions[GetTopic(*target.Service("+"), "cmd", "health", "check")] = 1
+		slog.Info("Subscribing to topics.", "topics", subscriptions)
+		tok = c.SubscribeMultiple(subscriptions, nil)
+		tok.Wait()
+
+		// Delay before publishing health status
+		// FIXME: This can be removed once thin-edge.io supports a registration API
+		time.Sleep(1000 * time.Millisecond)
+		payload, err = PayloadHealthStatus(map[string]any{}, StatusUp)
 		if err != nil {
 			return
 		}
 		topic := GetHealthTopic(target)
-		tok := c.Publish(topic, 1, true, payload)
+		tok = c.Publish(topic, 1, true, payload)
 		<-tok.Done()
 		if err := tok.Error(); err != nil {
 			slog.Warn("Failed to publish health message.", "err", err)
@@ -227,28 +245,6 @@ func (c *Client) Connect() error {
 		panic("Failed to connect to broker")
 	}
 	<-tok.Done()
-	if err := tok.Error(); err != nil {
-		return err
-	}
-
-	payload, err := PayloadRegistration(map[string]any{}, c.ServiceName, "service", c.Parent.TopicID)
-	if err != nil {
-		return err
-	}
-	tok = c.Client.Publish(GetTopicRegistration(c.Target), 1, true, payload)
-	<-tok.Done()
-	if err := tok.Error(); err != nil {
-		return err
-	}
-	slog.Info("Registered service", "topic", GetTopicRegistration(c.Target))
-
-	// TODO: Let the caller decide which topics to subscribe to
-	subscriptions := make(map[string]byte)
-	subscriptions[c.Target.RootPrefix+"/+/+/+/+"] = 1
-	subscriptions[GetTopic(*c.Target.Service("+"), "cmd", "health", "check")] = 1
-	slog.Info("Subscribing to topics.", "topics", subscriptions)
-	tok = c.Client.SubscribeMultiple(subscriptions, nil)
-	tok.Wait()
 	return tok.Error()
 }
 

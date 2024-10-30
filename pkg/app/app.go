@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,6 +16,32 @@ import (
 	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
 )
 
+type Action int
+
+const (
+	ActionUpdateAll Action = iota
+	ActionUpdateMetrics
+)
+
+type ActionRequest struct {
+	Action  Action
+	Options any
+}
+
+func NewUpdateAllAction(filter container.FilterOptions) ActionRequest {
+	return ActionRequest{
+		Action:  ActionUpdateAll,
+		Options: filter,
+	}
+}
+
+func NewUpdateMetricsAction(filter container.FilterOptions) ActionRequest {
+	return ActionRequest{
+		Action:  ActionUpdateMetrics,
+		Options: filter,
+	}
+}
+
 type App struct {
 	client          *tedge.Client
 	ContainerClient *container.ContainerClient
@@ -23,7 +50,7 @@ type App struct {
 
 	config         Config
 	shutdown       chan struct{}
-	updateRequests chan container.FilterOptions
+	updateRequests chan ActionRequest
 	updateResults  chan error
 	wg             sync.WaitGroup
 }
@@ -92,7 +119,7 @@ func NewApp(device tedge.Target, config Config) (*App, error) {
 		ContainerClient: containerClient,
 		Device:          &device,
 		config:          config,
-		updateRequests:  make(chan container.FilterOptions),
+		updateRequests:  make(chan ActionRequest),
 		updateResults:   make(chan error),
 		shutdown:        make(chan struct{}),
 		wg:              sync.WaitGroup{},
@@ -122,7 +149,7 @@ func (a *App) Subscribe() error {
 						fmt.Sprintf("^%s$", name),
 					}
 				}
-				a.updateRequests <- opts
+				a.updateRequests <- NewUpdateAllAction(opts)
 			}(parts[4])
 		}
 	})
@@ -148,12 +175,24 @@ func (a *App) worker() {
 	for {
 		select {
 		case opts := <-a.updateRequests:
-			slog.Info("Processing update request")
-			err := a.doUpdate(opts)
-			// Don't block when publishing results
-			go func() {
-				a.updateResults <- err
-			}()
+
+			switch opts.Action {
+			case ActionUpdateAll:
+				slog.Info("Processing update request")
+				err := a.doUpdate(opts.Options.(container.FilterOptions))
+				// Don't block when publishing results
+				go func() {
+					a.updateResults <- err
+				}()
+			case ActionUpdateMetrics:
+				items, err := a.ContainerClient.List(context.Background(), opts.Options.(container.FilterOptions))
+				if err != nil {
+					slog.Warn("Could not get container list.", "err", err)
+				} else {
+					a.updateMetrics(items)
+				}
+			}
+
 		case <-a.shutdown:
 			slog.Info("Stopping background task")
 			return
@@ -162,7 +201,13 @@ func (a *App) worker() {
 }
 
 func (a *App) Update(filterOptions container.FilterOptions) error {
-	a.updateRequests <- filterOptions
+	a.updateRequests <- NewUpdateAllAction(filterOptions)
+	err := <-a.updateResults
+	return err
+}
+
+func (a *App) UpdateMetrics(filterOptions container.FilterOptions) error {
+	a.updateRequests <- NewUpdateMetricsAction(filterOptions)
 	err := <-a.updateResults
 	return err
 }
@@ -256,6 +301,50 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 			slog.Info("Received error.", "value", err)
 		}
 	}
+}
+
+func (a *App) updateMetrics(items []container.TedgeContainer) error {
+	totalWorkers := 5
+	numJobs := len(items)
+	jobs := make(chan container.TedgeContainer, numJobs)
+	results := make(chan error, numJobs)
+
+	doWork := func(jobs <-chan container.TedgeContainer, results chan<- error) {
+		for j := range jobs {
+			var jobErr error
+			stats, jobErr := a.ContainerClient.GetStats(context.Background(), j.Container.Id)
+
+			if jobErr == nil {
+				target := a.Device.Service(j.Name)
+				topic := tedge.GetTopic(*target, "m", "resource_usage")
+				payload, err := json.Marshal(stats)
+				if err == nil {
+					slog.Info("Publish container stats.", "topic", topic, "payload", payload)
+					jobErr = a.client.Publish(topic, 1, false, payload)
+				}
+			}
+			results <- jobErr
+		}
+	}
+
+	for w := 1; w <= totalWorkers; w++ {
+		go doWork(jobs, results)
+	}
+
+	for _, item := range items {
+		jobs <- item
+	}
+	close(jobs)
+
+	jobErrors := make([]error, 0)
+	for a := 1; a <= numJobs; a++ {
+		err := <-results
+		jobErrors = append(jobErrors, err)
+		if err != nil {
+			slog.Warn("Failed to update metrics.", "err", err)
+		}
+	}
+	return errors.Join(jobErrors...)
 }
 
 func (a *App) doUpdate(filterOptions container.FilterOptions) error {
@@ -357,14 +446,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 
 	// Update metrics
 	if a.config.EnableMetrics {
-		for _, item := range items {
-			stats, err := a.ContainerClient.GetStats(context.Background(), item.Container.Id)
-			if err != nil {
-				slog.Warn("Failed to read container stats", "err", err)
-			} else {
-				slog.Info("Container stats.", "stats", stats)
-			}
-		}
+		a.updateMetrics(items)
 	}
 
 	// Delete removed values, via MQTT and c8y API

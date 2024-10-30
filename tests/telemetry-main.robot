@@ -3,7 +3,6 @@ Resource    ./resources/common.robot
 Library    Cumulocity
 Library    DeviceLibrary    bootstrap_script=bootstrap.sh
 
-# Suite Setup    Set Main Device
 Test Setup    Test Setup
 
 *** Test Cases ***
@@ -20,9 +19,13 @@ Service status
     Cumulocity.Should Have Services    name=tedge-container-monitor      service_type=service    status=up
 
 Sends measurements
-    Skip    TODO
     ${date_from}=    Get Test Start Time
-    Cumulocity.Device Should Have Measurements    minimum=1    maximum=1    type=environment    after=${date_from}
+    Install Example Container
+    ${SERVICE_SN}=    Get Service External ID    ${DEVICE_SN}    customapp1
+    Cumulocity.External Identity Should Exist    ${SERVICE_SN}
+    ${measurements}=    Cumulocity.Device Should Have Measurements    minimum=1    type=resource_usage    after=${date_from}    timeout=120
+
+    [Teardown]    Uninstall Example Container
 
 *** Keywords ***
 
@@ -30,3 +33,16 @@ Test Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Cumulocity.External Identity Should Exist    ${DEVICE_SN}
+
+Install Example Container
+    ${operation}=    Cumulocity.Install Software    {"name": "customapp1", "version": "httpd:2.4", "softwareType": "container"}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+
+Uninstall Example Container
+    Cumulocity.Set Managed Object    ${DEVICE_SN}
+    ${operation}=    Cumulocity.Uninstall Software    {"name": "customapp1", "version": "httpd:2.4", "softwareType": "container"}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+
+Get Service External ID
+    [Arguments]    ${device_sn}    ${service_name}
+    RETURN    ${device_sn}:device:main:service:${service_name}

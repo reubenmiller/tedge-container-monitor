@@ -35,7 +35,7 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
 * [x] Add subcommand for
     * [x] container sm-plugin
 
-* [ ] Publish telemetry data (in same format at docker stats)
+* [x] Publish telemetry data (in same format at docker stats)
 
 * [x] Read config from file and environment variables
 

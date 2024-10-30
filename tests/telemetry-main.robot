@@ -4,7 +4,6 @@ Library    Cumulocity
 Library    DeviceLibrary    bootstrap_script=bootstrap.sh
 
 Test Setup    Test Setup
-Test Teardown    Test Teardown
 
 *** Test Cases ***
 
@@ -21,9 +20,12 @@ Service status
 
 Sends measurements
     ${date_from}=    Get Test Start Time
+    Install Example Container
     ${SERVICE_SN}=    Get Service External ID    ${DEVICE_SN}    customapp1
     Cumulocity.External Identity Should Exist    ${SERVICE_SN}
     ${measurements}=    Cumulocity.Device Should Have Measurements    minimum=1    type=resource_usage    after=${date_from}    timeout=120
+
+    [Teardown]    Uninstall Example Container
 
 *** Keywords ***
 
@@ -31,10 +33,6 @@ Test Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Cumulocity.External Identity Should Exist    ${DEVICE_SN}
-    Install Example Container
-
-Test Teardown
-    Uninstall Example Container
 
 Install Example Container
     ${operation}=    Cumulocity.Install Software    {"name": "customapp1", "version": "httpd:2.4", "softwareType": "container"}

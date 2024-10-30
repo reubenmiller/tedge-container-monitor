@@ -290,29 +290,6 @@ func (c *Client) DeregisterEntity(target Target) error {
 	return nil
 }
 
-// func (c *Client) Register(topics []string, qos byte, handler MessageHandler) error {
-// 	handlerWrapper := func(c mqtt.Client, m mqtt.Message) {
-// 		payloadLen := len(m.Payload())
-// 		slog.Info("Received message.", "topic", m.Topic(), "payload_len", payloadLen)
-
-// 		if payloadLen == 0 {
-// 			slog.Info("Ignoring empty message", "topic", m.Topic())
-// 			return
-// 		}
-// 		handler(m.Topic(), string(m.Payload()))
-// 	}
-
-// 	for _, topic := range topics {
-// 		if _, exists := s.Subscriptions[topic]; exists {
-// 			slog.Warn("Duplicate topic detected. The new handler will replace the previous one.", "topic", topic)
-// 		}
-// 		s.Subscriptions[topic] = qos
-// 		slog.Info("Adding mqtt route.", "topic", topic)
-// 		s.Client.AddRoute(topic, handlerWrapper)
-// 	}
-// 	return nil
-// }
-
 // Get the thin-edge.io entities that have already been registered (as retained messages)
 func (c *Client) GetEntities() (map[string]any, error) {
 	c.mutex.RLock()

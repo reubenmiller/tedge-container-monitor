@@ -243,10 +243,32 @@ type ContainerTelemetryMessage struct {
 	Container ContainerStats `json:"container"`
 }
 
+// Custom float representation which controls how many decimal places
+// are used when marshalling the value to JSON
+type LowPrecisionFloat struct {
+	// Value
+	Value float64
+
+	// Number of digital to display
+	Digits int
+}
+
+func (l LowPrecisionFloat) MarshalJSON() ([]byte, error) {
+	s := fmt.Sprintf("%.*f", l.Digits, l.Value)
+	return []byte(s), nil
+}
+
+func NewLowerPrecisionFloat64(value float64, precision int) LowPrecisionFloat {
+	return LowPrecisionFloat{
+		Value:  value,
+		Digits: precision,
+	}
+}
+
 type ContainerStats struct {
-	Cpu    uint64 `json:"cpu"`
-	Memory uint64 `json:"memory"`
-	NetIO  uint64 `json:"netio"`
+	Cpu    LowPrecisionFloat `json:"cpu"`
+	Memory LowPrecisionFloat `json:"memory"`
+	NetIO  LowPrecisionFloat `json:"netio"`
 }
 
 func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (*ContainerTelemetryMessage, error) {
@@ -263,36 +285,14 @@ func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (*Co
 	wg.Wait()
 
 	s := containerStats.GetStatistics()
-	slog.Info("Stats.", "memPerc", s.MemoryPercentage, "cpuPerc", s.CPUPercentage, "networkIO", s.NetworkTx)
-
-	resp, err := c.Client.ContainerStatsOneShot(ctx, containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	statsResponse := &container.StatsResponse{}
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&statsResponse); err != nil {
-		return nil, err
-	}
-
-	// See https://github.com/docker/cli/blob/master/cli/command/container/stats_helpers.go#L105
-	// https://github.com/docker/cli/blob/062eecf14af34d7295da16c23c2578fcf4aa0196/cli/command/container/stats_helpers.go#L70
-	// https://stackoverflow.com/questions/30271942/get-docker-container-cpu-usage-as-percentage
-	txBytes := uint64(0)
-	for _, netw := range statsResponse.Networks {
-		txBytes += netw.TxBytes
-	}
-
 	stats := &ContainerTelemetryMessage{
 		Container: ContainerStats{
-			Cpu:    statsResponse.CPUStats.SystemUsage,
-			Memory: statsResponse.MemoryStats.Usage,
-			NetIO:  txBytes,
+			Cpu:    NewLowerPrecisionFloat64(s.CPUPercentage, 2),
+			Memory: NewLowerPrecisionFloat64(s.MemoryPercentage, 2),
+			NetIO:  NewLowerPrecisionFloat64(s.NetworkTx, 0),
 		},
 	}
-
-	return stats, err
+	return stats, nil
 }
 
 type FilterOptions struct {

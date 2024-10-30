@@ -77,6 +77,15 @@ func (c *Config) GetMQTTHost() string {
 	return viper.GetString("monitor.mqtt.client.host")
 }
 
+func (c *Config) GetMetricsInterval() time.Duration {
+	interval := viper.GetDuration("monitor.metrics.interval")
+	if interval < 60*time.Second {
+		slog.Warn("monitor.metrics.interval is lower than allowed limit.", "old", interval, "new", 60*time.Second)
+		interval = 60 * time.Second
+	}
+	return interval
+}
+
 func (c *Config) GetMQTTPort() uint16 {
 	v := viper.GetUint16("monitor.mqtt.client.port")
 	if v == 0 {
@@ -185,12 +194,32 @@ to the thin-edge.io interface.
 		// Start background monitor
 		ctx, cancel := context.WithCancel(context.Background())
 		go application.Monitor(ctx, container.FilterOptions{})
+
+		if config.MetricsEnabled() {
+			go backgroundMetric(ctx, application, config.GetMetricsInterval())
+		}
+
 		<-stop
 		cancel()
 		application.Stop(false)
 		slog.Info("Shutting down...")
 		return nil
 	},
+}
+
+func backgroundMetric(ctx context.Context, application *app.App, interval time.Duration) error {
+	timerCh := time.NewTicker(interval)
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Stopping metrics task")
+			return ctx.Err()
+
+		case <-timerCh.C:
+			slog.Info("Refreshing metrics")
+			application.UpdateMetrics(config.GetFilterOptions())
+		}
+	}
 }
 
 func init() {
@@ -210,6 +239,8 @@ func init() {
 	runCmd.Flags().String("mqtt-device-topic-id", DefaultTopicPrefix, "The device MQTT topic identifier")
 	runCmd.Flags().BoolVar(&config.RunOnce, "once", false, "Only run the monitor once")
 	runCmd.Flags().String("device-id", "", "thin-edge.io device id")
+
+	runCmd.Flags().Duration("interval", 300*time.Second, "Metrics update interval")
 
 	//
 	// viper bindings
@@ -235,8 +266,12 @@ func init() {
 	viper.SetDefault("monitor.filter.exclude.names", "")
 	viper.SetDefault("monitor.filter.exclude.labels", "")
 
+	// Metrics
+	viper.BindPFlag("monitor.metrics.interval", runCmd.Flags().Lookup("interval"))
+	viper.SetDefault("monitor.metrics.interval", "300s")
+	viper.SetDefault("monitor.metrics.enabled", true)
+
 	// Feature flags
-	viper.SetDefault("monitor.metrics.enabled", false)
 	viper.SetDefault("monitor.events.enabled", true)
 	viper.SetDefault("monitor.delete_from_cloud.enabled", true)
 

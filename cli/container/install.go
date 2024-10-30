@@ -125,7 +125,9 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer out.Close()
-		io.Copy(os.Stderr, out)
+		if _, ioErr := io.Copy(os.Stderr, out); ioErr != nil {
+			slog.Warn("Could not write to stderr.", "err", ioErr)
+		}
 	} else {
 		slog.Info("Image already exists.", "ref", imageRef, "id", images[0].ID, "tags", images[0].RepoTags)
 	}

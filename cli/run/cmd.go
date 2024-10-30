@@ -83,10 +83,14 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 
 			// Start background monitor
 			ctx, cancel := context.WithCancel(context.Background())
-			go application.Monitor(ctx, container.FilterOptions{})
+			go func() {
+				_ = application.Monitor(ctx, container.FilterOptions{})
+			}()
 
 			if cliContext.MetricsEnabled() {
-				go backgroundMetric(ctx, cliContext, application, cliContext.GetMetricsInterval())
+				go func() {
+					_ = backgroundMetric(ctx, cliContext, application, cliContext.GetMetricsInterval())
+				}()
 			}
 
 			<-stop
@@ -113,27 +117,27 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 
 	// Service
 	viper.SetDefault("monitor.service_name", DefaultServiceName)
-	viper.BindPFlag("monitor.service_name", cmd.Flags().Lookup("service-name"))
+	_ = viper.BindPFlag("monitor.service_name", cmd.Flags().Lookup("service-name"))
 
 	// MQTT topics
 	viper.SetDefault("monitor.mqtt.topic_root", DefaultTopicRoot)
-	viper.BindPFlag("monitor.mqtt.topic_root", cmd.Flags().Lookup("mqtt-topic-root"))
+	_ = viper.BindPFlag("monitor.mqtt.topic_root", cmd.Flags().Lookup("mqtt-topic-root"))
 	viper.SetDefault("monitor.mqtt.device_topic_id", DefaultTopicPrefix)
-	viper.BindPFlag("monitor.mqtt.device_topic_id", cmd.Flags().Lookup("mqtt-device-topic-id"))
-	viper.BindPFlag("monitor.mqtt.device_id", cmd.Flags().Lookup("device-id"))
+	_ = viper.BindPFlag("monitor.mqtt.device_topic_id", cmd.Flags().Lookup("mqtt-device-topic-id"))
+	_ = viper.BindPFlag("monitor.mqtt.device_id", cmd.Flags().Lookup("device-id"))
 
 	// Include filters
-	viper.BindPFlag("monitor.filter.include.names", cmd.Flags().Lookup("name"))
-	viper.BindPFlag("monitor.filter.include.labels", cmd.Flags().Lookup("label"))
-	viper.BindPFlag("monitor.filter.include.ids", cmd.Flags().Lookup("id"))
-	viper.BindPFlag("monitor.filter.include.types", cmd.Flags().Lookup("type"))
+	_ = viper.BindPFlag("monitor.filter.include.names", cmd.Flags().Lookup("name"))
+	_ = viper.BindPFlag("monitor.filter.include.labels", cmd.Flags().Lookup("label"))
+	_ = viper.BindPFlag("monitor.filter.include.ids", cmd.Flags().Lookup("id"))
+	_ = viper.BindPFlag("monitor.filter.include.types", cmd.Flags().Lookup("type"))
 
 	// Exclude filters
 	viper.SetDefault("monitor.filter.exclude.names", "")
 	viper.SetDefault("monitor.filter.exclude.labels", "")
 
 	// Metrics
-	viper.BindPFlag("monitor.metrics.interval", cmd.Flags().Lookup("interval"))
+	_ = viper.BindPFlag("monitor.metrics.interval", cmd.Flags().Lookup("interval"))
 	viper.SetDefault("monitor.metrics.interval", "300s")
 	viper.SetDefault("monitor.metrics.enabled", true)
 
@@ -166,7 +170,9 @@ func backgroundMetric(ctx context.Context, cliContext cli.Cli, application *app.
 
 		case <-timerCh.C:
 			slog.Info("Refreshing metrics")
-			application.UpdateMetrics(cliContext.GetFilterOptions())
+			if err := application.UpdateMetrics(cliContext.GetFilterOptions()); err != nil {
+				slog.Warn("Error updating metrics.", "err", err)
+			}
 		}
 	}
 }

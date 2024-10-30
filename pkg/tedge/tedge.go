@@ -113,8 +113,6 @@ type ClientConfig struct {
 
 	C8yHost string
 	C8yPort uint16
-
-	OnConnection func() error
 }
 
 func CumulocityClientFromConfig(useCerts bool, config *ClientConfig) *c8y.Client {
@@ -157,9 +155,6 @@ func NewClient(parent Target, target Target, serviceName string, config *ClientC
 
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
 		slog.Info("MQTT Client is connected")
-		if config.OnConnection != nil {
-			config.OnConnection()
-		}
 
 		payload, err := PayloadRegistration(map[string]any{}, serviceName, "service", parent.TopicID)
 		if err != nil {

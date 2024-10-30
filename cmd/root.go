@@ -12,17 +12,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/thin-edge/tedge-container-monitor/cli/container"
+	"github.com/thin-edge/tedge-container-monitor/cli/run"
+	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
 )
 
 // Build data
 var buildVersion string
 var buildBranch string
-
-var rootConfig RootConfig
-
-type RootConfig struct {
-	ConfigFile string
-}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -75,34 +72,16 @@ func SetLogLevel() error {
 	return nil
 }
 
-func initConfig() {
-	if rootConfig.ConfigFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(rootConfig.ConfigFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		// Search config in home directory with name ".cobra" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".tedge-container")
-	}
-
-	viper.SetEnvPrefix("CONTAINER")
-	viper.AutomaticEnv()
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	if err := viper.ReadInConfig(); err == nil {
-		slog.Info("Using config file", "path", viper.ConfigFileUsed())
-	}
-}
-
 func init() {
-	cobra.OnInitialize(initConfig)
+	cliConfig := cli.Cli{}
+	cobra.OnInitialize(cliConfig.OnInit)
+	rootCmd.AddCommand(
+		container.NewContainerCommand(cliConfig),
+		run.NewRunCommand(cliConfig),
+	)
+
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level")
-	rootCmd.PersistentFlags().StringVarP(&rootConfig.ConfigFile, "config", "c", "", "Configuration file")
+	rootCmd.PersistentFlags().StringVarP(&cliConfig.ConfigFile, "config", "c", "", "Configuration file")
 
 	// viper.Bind
 	viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))

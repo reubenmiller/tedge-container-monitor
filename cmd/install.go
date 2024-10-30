@@ -97,17 +97,6 @@ var installCmd = &cobra.Command{
 			// Network already exists
 			slog.Info("Network already exists.", "name", netw.Name, "id", netw.ID)
 		}
-		// netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})
-
-		// if errdefs.IsConflict(err) {
-		// 	slog.Info("Network already exists.", "id", DefaultNetworkName)
-		// } else if err != nil {
-		// 	slog.Error("Failed to create container network.", "err", err)
-		// 	return err
-		// }
-		// if netwResp.ID != "" {
-		// 	slog.Info("Create default network.", "id", netwResp.ID)
-		// }
 
 		//
 		// Check and pull image if it is not present

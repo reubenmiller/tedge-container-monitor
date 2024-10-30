@@ -43,10 +43,6 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
     * [x] MQTT broker
     * [x] Cumulocity Local Proxy
 
-* [ ] Cleanup code
-    * [ ] Removal all TODOs
-    * [ ] Rearrange logic (currently it is too nested)
-
 ### Phase 2
 
 * [ ] Fix container id to container-group service lookup (triggered from the system events)
@@ -56,4 +52,3 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
 * [ ] Support start/stop/restart/pause/unpause container
 
 * [ ] Support executing custom command in container?
-

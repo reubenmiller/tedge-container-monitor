@@ -5,6 +5,10 @@ set export
 IMAGE := env_var_or_default("IMAGE", "debian-systemd")
 IMAGE_SRC := env_var_or_default("IMAGE_SRC", "debian-systemd")
 
+# Run linting
+lint:
+    golangci-lint run
+
 # Release all artifacts
 release *ARGS='':
     mkdir -p output

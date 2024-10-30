@@ -15,42 +15,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-type stats struct {
-	mu sync.RWMutex
-	cs []*Stats
-}
-
 // daemonOSType is set once we have at least one stat for a container
 // from the daemon. It is used to ensure we print the right header based
 // on the daemon platform.
 var daemonOSType string
-
-func (s *stats) add(cs *Stats) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, exists := s.isKnownContainer(cs.Container); !exists {
-		s.cs = append(s.cs, cs)
-		return true
-	}
-	return false
-}
-
-func (s *stats) remove(id string) {
-	s.mu.Lock()
-	if i, exists := s.isKnownContainer(id); exists {
-		s.cs = append(s.cs[:i], s.cs[i+1:]...)
-	}
-	s.mu.Unlock()
-}
-
-func (s *stats) isKnownContainer(cid string) (int, bool) {
-	for i, c := range s.cs {
-		if c.Container == cid {
-			return i, true
-		}
-	}
-	return -1, false
-}
 
 func collect(ctx context.Context, s *Stats, cli client.ContainerAPIClient, streamStats bool, waitFirst *sync.WaitGroup) {
 	slog.Info("collecting stats", "container", s.Container)

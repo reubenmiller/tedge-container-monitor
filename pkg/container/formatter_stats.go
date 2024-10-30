@@ -1,27 +1,7 @@
 package container
 
 import (
-	"encoding/json"
-	"fmt"
-	"strconv"
 	"sync"
-
-	units "github.com/docker/go-units"
-)
-
-const (
-	winOSType                  = "windows"
-	defaultStatsTableFormat    = "table {{.ID}}\t{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}\t{{.PIDs}}"
-	winDefaultStatsTableFormat = "table {{.ID}}\t{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}"
-
-	containerHeader = "CONTAINER"
-	cpuPercHeader   = "CPU %"
-	netIOHeader     = "NET I/O"
-	blockIOHeader   = "BLOCK I/O"
-	memPercHeader   = "MEM %"             // Used only on Linux
-	winMemUseHeader = "PRIV WORKING SET"  // Used only on Windows
-	memUseHeader    = "MEM USAGE / LIMIT" // Used only on Linux
-	pidsHeader      = "PIDS"              // Used only on Linux
 )
 
 // StatsEntry represents the statistics data collected from a container
@@ -102,82 +82,4 @@ func (cs *Stats) GetStatistics() StatsEntry {
 // NewStats returns a new Stats entity and sets in it the given name
 func NewStats(container string) *Stats {
 	return &Stats{StatsEntry: StatsEntry{Container: container}}
-}
-
-type statsContext struct {
-	// formatter.HeaderContext
-	s     StatsEntry
-	os    string
-	trunc bool
-}
-
-func (c *statsContext) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c)
-}
-
-func (c *statsContext) Container() string {
-	return c.s.Container
-}
-
-func (c *statsContext) Name() string {
-	if len(c.s.Name) > 1 {
-		return c.s.Name[1:]
-	}
-	return "--"
-}
-
-func (c *statsContext) ID() string {
-	if c.trunc {
-		return fmt.Sprintf("%s", c.s.ID[0:6])
-	}
-	return c.s.ID
-}
-
-func (c *statsContext) CPUPerc() string {
-	if c.s.IsInvalid {
-		return "--"
-	}
-	return formatPercentage(c.s.CPUPercentage)
-}
-
-func (c *statsContext) MemUsage() string {
-	if c.s.IsInvalid {
-		return "-- / --"
-	}
-	if c.os == winOSType {
-		return units.BytesSize(c.s.Memory)
-	}
-	return units.BytesSize(c.s.Memory) + " / " + units.BytesSize(c.s.MemoryLimit)
-}
-
-func (c *statsContext) MemPerc() string {
-	if c.s.IsInvalid || c.os == winOSType {
-		return "--"
-	}
-	return formatPercentage(c.s.MemoryPercentage)
-}
-
-func (c *statsContext) NetIO() string {
-	if c.s.IsInvalid {
-		return "--"
-	}
-	return units.HumanSizeWithPrecision(c.s.NetworkRx, 3) + " / " + units.HumanSizeWithPrecision(c.s.NetworkTx, 3)
-}
-
-func (c *statsContext) BlockIO() string {
-	if c.s.IsInvalid {
-		return "--"
-	}
-	return units.HumanSizeWithPrecision(c.s.BlockRead, 3) + " / " + units.HumanSizeWithPrecision(c.s.BlockWrite, 3)
-}
-
-func (c *statsContext) PIDs() string {
-	if c.s.IsInvalid || c.os == winOSType {
-		return "--"
-	}
-	return strconv.FormatUint(c.s.PidsCurrent, 10)
-}
-
-func formatPercentage(val float64) string {
-	return strconv.FormatFloat(val, 'f', 2, 64) + "%"
 }

@@ -326,6 +326,7 @@ func (c *ContainerClient) GetContainer(ctx context.Context, containerID string) 
 // Stop and remove a container
 // Don't fail if the container does not exist
 func (c *ContainerClient) StopRemoveContainer(ctx context.Context, containerID string) error {
+	slog.Info("Stopping container.", "id", containerID)
 	err := c.Client.ContainerStop(ctx, containerID, container.StopOptions{})
 	if err != nil {
 		if errdefs.IsNotFound(err) {
@@ -334,6 +335,7 @@ func (c *ContainerClient) StopRemoveContainer(ctx context.Context, containerID s
 		}
 		return err
 	}
+	slog.Info("Removing container.", "id", containerID)
 	err = c.Client.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		RemoveVolumes: false,
 		RemoveLinks:   false,

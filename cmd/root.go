@@ -52,6 +52,7 @@ func Execute() {
 
 	err := rootCmd.Execute()
 	if err != nil {
+		slog.Error("Command error", "err", err)
 		os.Exit(1)
 	}
 }

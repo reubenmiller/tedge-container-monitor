@@ -189,7 +189,9 @@ func (a *App) worker() {
 				if err != nil {
 					slog.Warn("Could not get container list.", "err", err)
 				} else {
-					a.updateMetrics(items)
+					if updateErr := a.updateMetrics(items); updateErr != nil {
+						slog.Warn("Error updating metrics.", "err", updateErr)
+					}
 				}
 			}
 
@@ -274,14 +276,18 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 				case events.ActionCreate:
 					slog.Info("Container created", "container", evt.Actor.ID)
 				case events.ActionStart, events.ActionStop, events.ActionPause, events.ActionUnPause:
-					a.Update(container.FilterOptions{
+					if err := a.Update(container.FilterOptions{
 						IDs: []string{evt.Actor.ID},
-					})
+					}); err != nil {
+						slog.Warn("Error updating container state.", "err", err)
+					}
 				case events.ActionDestroy, events.ActionRemove:
 					slog.Info("Container removed/destroyed", "container", evt.Actor.ID, "attributes", evt.Actor.Attributes)
 					// TODO: Trigger a removal instead of checking the whole state
 					// Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
-					a.Update(container.FilterOptions{})
+					if err := a.Update(container.FilterOptions{}); err != nil {
+						slog.Warn("Error updating container state.", "err", err)
+					}
 				}
 
 				if a.config.EnableEngineEvents {
@@ -443,7 +449,9 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 
 	// Update metrics
 	if a.config.EnableMetrics {
-		a.updateMetrics(items)
+		if err := a.updateMetrics(items); err != nil {
+			slog.Warn("Error updating metrics.", "err", err)
+		}
 	}
 
 	// Delete removed values, via MQTT and c8y API

@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-monitor/cli/container"
+	"github.com/thin-edge/tedge-container-monitor/cli/container_group"
 	"github.com/thin-edge/tedge-container-monitor/cli/run"
 	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
 )
@@ -78,6 +79,7 @@ func init() {
 	cobra.OnInitialize(cliConfig.OnInit)
 	rootCmd.AddCommand(
 		container.NewContainerCommand(cliConfig),
+		container_group.NewContainerGroupCommand(cliConfig),
 		run.NewRunCommand(cliConfig),
 	)
 

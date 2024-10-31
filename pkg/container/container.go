@@ -3,10 +3,13 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"os"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -17,9 +20,12 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/go-units"
+	"github.com/thin-edge/tedge-container-monitor/pkg/utils"
 )
 
 var ContainerType string = "container"
@@ -446,4 +452,151 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 
 func (c *ContainerClient) MonitorEvents(ctx context.Context) (<-chan events.Message, <-chan error) {
 	return c.Client.Events(context.Background(), events.ListOptions{})
+}
+
+// Create shared network
+func (c *ContainerClient) CreateSharedNetwork(ctx context.Context, name string) error {
+	netw, err := c.Client.NetworkInspect(ctx, name, network.InspectOptions{})
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+		// Create network
+		netwResp, err := c.Client.NetworkCreate(ctx, name, network.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		slog.Info("Created network.", "name", name, "id", netwResp.ID)
+	} else {
+		// Network already exists
+		slog.Info("Network already exists.", "name", netw.Name, "id", netw.ID)
+	}
+	return nil
+}
+
+func (c *ContainerClient) ComposeUp(ctx context.Context, w io.Writer, projectName string, workingDir string, extraArgs ...string) error {
+	slog.Info("Starting compose project.", "name", projectName, "dir", workingDir)
+	command, args, err := prepareComposeCommand("up", "--detach", "--remove-orphans")
+	if err != nil {
+		return err
+	}
+	args = append(args, extraArgs...)
+	prog := exec.Command(command, args...)
+	prog.Dir = workingDir
+	out, err := prog.Output()
+	fmt.Fprintf(w, "%s", out)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *ContainerClient) ComposeDown(ctx context.Context, w io.Writer, projectName string) error {
+	// TODO: Read setting from configuration
+	manualCleanup := false
+	errs := make([]error, 0)
+
+	workingDir := ""
+
+	projectFilter := filters.NewArgs(
+		filters.Arg("label", "com.docker.compose.project="+projectName),
+	)
+	projectContainers, err := c.Client.ContainerList(ctx, container.ListOptions{
+		Filters: projectFilter,
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, item := range projectContainers {
+		if v, ok := item.Labels["com.docker.compose.project.working_dir"]; ok {
+			workingDir = v
+			break
+		}
+	}
+
+	// Find
+	if workingDir != "" && utils.PathExists(workingDir) {
+		command, args, err := prepareComposeCommand("down", "--remove-orphans", "--volumes")
+		if err != nil {
+			return err
+		}
+		slog.Info("Stopping compose project.", "name", projectName, "dir", workingDir, "command", command, "args", strings.Join(args, " "))
+		prog := exec.Command(command, args...)
+		prog.Dir = workingDir
+		out, err := prog.Output()
+		fmt.Fprintf(w, "%s", out)
+
+		if err == nil {
+			slog.Info("Removing project directory.", "dir", workingDir)
+			if err := os.RemoveAll(workingDir); err != nil {
+				// non critical error
+				slog.Warn("Failed to remove project directory.", "err", err)
+			}
+			return nil
+		}
+
+		errs = append(errs, err)
+		slog.Warn("compose failed.", "err", err)
+	}
+
+	if !manualCleanup {
+		return errors.Join(errs...)
+	}
+
+	// Manually remove in case if docker compose fail
+	// Get containers
+
+	// Stop containers
+	for _, item := range projectContainers {
+		if err := c.Client.ContainerStop(ctx, item.ID, container.StopOptions{}); err != nil {
+			slog.Warn("Failed to stop container.", "err", err)
+			errs = append(errs, err)
+		}
+	}
+
+	// Remove containers
+	for _, item := range projectContainers {
+		if err := c.Client.ContainerRemove(ctx, item.ID, container.RemoveOptions{
+			RemoveVolumes: true,
+			RemoveLinks:   true,
+			Force:         true,
+		}); err != nil {
+			slog.Warn("Failed to stop container.", "err", err)
+			errs = append(errs, err)
+		}
+	}
+
+	// Get networks
+	projectNetworks, err := c.Client.NetworkList(ctx, network.ListOptions{
+		Filters: projectFilter,
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	// Remove networks
+	for _, item := range projectNetworks {
+		if err := c.Client.NetworkRemove(ctx, item.ID); err != nil {
+			slog.Warn("Failed to remove network.", "err", err)
+			errs = append(errs, err)
+		}
+	}
+
+	// Remove volumes
+	projectVolumes, err := c.Client.VolumeList(ctx, volume.ListOptions{
+		Filters: projectFilter,
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, item := range projectVolumes.Volumes {
+		if err := c.Client.VolumeRemove(ctx, item.Name, true); err != nil {
+			slog.Warn("Failed to remove volume.", "err", err)
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }

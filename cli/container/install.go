@@ -15,7 +15,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/errdefs"
 	"github.com/spf13/cobra"
 	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
 	"github.com/thin-edge/tedge-container-monitor/pkg/container"
@@ -92,21 +91,9 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Install shared network
-	netw, err := cli.Client.NetworkInspect(ctx, DefaultNetworkName, network.InspectOptions{})
-	if err != nil {
-		if !errdefs.IsNotFound(err) {
-			return err
-		}
-		// Create network
-		netwResp, err := cli.Client.NetworkCreate(ctx, DefaultNetworkName, network.CreateOptions{})
-		if err != nil {
-			return err
-		}
-		slog.Info("Created network.", "name", DefaultNetworkName, "id", netwResp.ID)
-	} else {
-		// Network already exists
-		slog.Info("Network already exists.", "name", netw.Name, "id", netw.ID)
+	// Create shared network
+	if err := cli.CreateSharedNetwork(ctx, DefaultNetworkName); err != nil {
+		return err
 	}
 
 	//

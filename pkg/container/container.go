@@ -476,11 +476,12 @@ func (c *ContainerClient) CreateSharedNetwork(ctx context.Context, name string) 
 
 func (c *ContainerClient) ComposeUp(ctx context.Context, w io.Writer, projectName string, workingDir string, extraArgs ...string) error {
 	slog.Info("Starting compose project.", "name", projectName, "dir", workingDir)
-	args := []string{
-		"compose", "up", "--detach", "--remove-orphans",
+	command, args, err := prepareComposeCommand("up", "--detach", "--remove-orphans")
+	if err != nil {
+		return err
 	}
 	args = append(args, extraArgs...)
-	prog := exec.Command("docker", args...)
+	prog := exec.Command(command, args...)
 	prog.Dir = workingDir
 	out, err := prog.Output()
 	fmt.Fprintf(w, "%s", out)
@@ -516,8 +517,12 @@ func (c *ContainerClient) ComposeDown(ctx context.Context, w io.Writer, projectN
 
 	// Find
 	if workingDir != "" && utils.PathExists(workingDir) {
-		slog.Info("Stopping compose project.", "name", projectName, "dir", workingDir)
-		prog := exec.Command("docker", "compose", "down", "--remove-orphans", "--volumes")
+		command, args, err := prepareComposeCommand("down", "--remove-orphans", "--volumes")
+		if err != nil {
+			return err
+		}
+		slog.Info("Stopping compose project.", "name", projectName, "dir", workingDir, "command", command, "args", strings.Join(args, " "))
+		prog := exec.Command(command, args...)
 		prog.Dir = workingDir
 		out, err := prog.Output()
 		fmt.Fprintf(w, "%s", out)

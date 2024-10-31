@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"os"
+	"os/exec"
 )
 
 func PathExists(p string) bool {
@@ -19,4 +20,9 @@ func CopyFile(src string, dst string) error {
 	// Write data to dst
 	err = os.WriteFile(dst, data, 0644)
 	return err
+}
+
+func CommandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
 }

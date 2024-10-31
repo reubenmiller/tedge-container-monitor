@@ -447,3 +447,23 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 func (c *ContainerClient) MonitorEvents(ctx context.Context) (<-chan events.Message, <-chan error) {
 	return c.Client.Events(context.Background(), events.ListOptions{})
 }
+
+// Create shared network
+func (c *ContainerClient) CreateSharedNetwork(ctx context.Context, name string) error {
+	netw, err := c.Client.NetworkInspect(ctx, name, network.InspectOptions{})
+	if err != nil {
+		if !errdefs.IsNotFound(err) {
+			return err
+		}
+		// Create network
+		netwResp, err := c.Client.NetworkCreate(ctx, name, network.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		slog.Info("Created network.", "name", name, "id", netwResp.ID)
+	} else {
+		// Network already exists
+		slog.Info("Network already exists.", "name", netw.Name, "id", netw.ID)
+	}
+	return nil
+}

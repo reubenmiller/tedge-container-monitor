@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/thin-edge/tedge-container-monitor/pkg/container"
-	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
+	"github.com/thin-edge/tedge-container-plugin/pkg/container"
+	"github.com/thin-edge/tedge-container-plugin/pkg/tedge"
 )
 
 type SilentError error

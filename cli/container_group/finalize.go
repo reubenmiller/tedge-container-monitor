@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/spf13/cobra"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 )
 
 func NewFinalizeCommand(ctx cli.Cli) *cobra.Command {

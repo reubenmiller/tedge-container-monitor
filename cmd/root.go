@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/thin-edge/tedge-container-monitor/cli/container"
-	"github.com/thin-edge/tedge-container-monitor/cli/container_group"
-	"github.com/thin-edge/tedge-container-monitor/cli/engine"
-	"github.com/thin-edge/tedge-container-monitor/cli/run"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/cli/container"
+	"github.com/thin-edge/tedge-container-plugin/cli/container_group"
+	"github.com/thin-edge/tedge-container-plugin/cli/engine"
+	"github.com/thin-edge/tedge-container-plugin/cli/run"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 )
 
 // Build data

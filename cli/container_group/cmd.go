@@ -2,7 +2,7 @@ package container_group
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 )
 
 // NewContainerGroupCommand returns a cobra command for `container-group` subcommands

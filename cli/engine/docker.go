@@ -8,8 +8,8 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
-	"github.com/thin-edge/tedge-container-monitor/pkg/container"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 )
 
 type DockerCommand struct {

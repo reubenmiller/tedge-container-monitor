@@ -26,7 +26,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/go-units"
-	"github.com/thin-edge/tedge-container-monitor/pkg/utils"
+	"github.com/thin-edge/tedge-container-plugin/pkg/utils"
 )
 
 var ContainerType string = "container"

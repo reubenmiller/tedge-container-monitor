@@ -12,8 +12,8 @@ import (
 
 	"github.com/docker/docker/api/types/events"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/thin-edge/tedge-container-monitor/pkg/container"
-	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
+	"github.com/thin-edge/tedge-container-plugin/pkg/container"
+	"github.com/thin-edge/tedge-container-plugin/pkg/tedge"
 )
 
 type Action int

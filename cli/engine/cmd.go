@@ -2,7 +2,7 @@ package engine
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 )
 
 // NewCliCommand returns a cobra command for `cli` subcommands

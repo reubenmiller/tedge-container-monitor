@@ -13,9 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/thin-edge/tedge-container-monitor/pkg/app"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
-	"github.com/thin-edge/tedge-container-monitor/pkg/container"
+	"github.com/thin-edge/tedge-container-plugin/pkg/app"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 )
 
 var (

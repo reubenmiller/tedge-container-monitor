@@ -14,7 +14,7 @@ builds:
       flags:
         - -trimpath
       ldflags:
-        - -s -w -X github.com/thin-edge/tedge-container-monitor/cmd.buildVersion={{.Version}} -X github.com/thin-edge/tedge-container-monitor/cmd.buildBranch={{.Branch}}
+        - -s -w -X github.com/thin-edge/tedge-container-plugin/cmd.buildVersion={{.Version}} -X github.com/thin-edge/tedge-container-plugin/cmd.buildBranch={{.Branch}}
 
     id: macOS
     goos: [darwin]

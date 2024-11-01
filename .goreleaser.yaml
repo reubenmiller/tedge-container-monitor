@@ -71,7 +71,7 @@ archives:
 
 nfpms:
   - 
-    package_name: tedge-container-plugin
+    package_name: tedge-container-plugin-ng
     license: Apache 2.0
     maintainer: thin-edge.io <thinedge@thin-edge.io>
     homepage: https://github.com/thin-edge/tedge-container-plugin
@@ -84,6 +84,12 @@ nfpms:
       - deb
       - rpm
       - apk
+
+    # FIXME: Remove for official release, as the package can be called "tedge-container-plugin" instead of "tedge-container-plugin-ng"
+    replaces:
+      - tedge-container-plugin
+    provides:
+      - tedge-container-plugin
 
     scripts:
       preremove: ./packaging/scripts/pre-remove

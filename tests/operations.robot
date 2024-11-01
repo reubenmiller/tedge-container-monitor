@@ -83,12 +83,40 @@ Manual container creation/deletion
     Operation Should Be SUCCESSFUL    ${operation}
     Cumulocity.Should Have Services    name=manualapp1    service_type=container    min_count=0    max_count=0    timeout=10
 
+
+Manual container creation/deletion with error on run
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker run -d --name manualapp2 httpd:2.4 --invalid-arg || exit 0
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+    Cumulocity.Should Have Services    name=manualapp2    service_type=container    status=down
+
+    # Uninstall
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker rm manualapp2 --force
+    Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Have Services    name=manualapp2    service_type=container    min_count=0    max_count=0    timeout=10
+
+
+Manual container created and then killed
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker run -d --name manualapp3 busybox sh -c 'exec sleep infinity'
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+    Cumulocity.Should Have Services    name=manualapp3    service_type=container    status=up
+
+    # Manually kill the container's PID 1
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker kill -s KILL manualapp3
+    Cumulocity.Should Have Services    name=manualapp3    service_type=container    status=down
+
+    # Uninstall
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker rm manualapp3 --force
+    Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Have Services    name=manualapp3    service_type=container    min_count=0    max_count=0    timeout=10
+
+
 *** Keywords ***
 
 Suite Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Cumulocity.External Identity Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    name=tedge-container-monitor    service_type=service    min_count=1    max_count=1    timeout=30
 
     # Create common network for all containers
     ${operation}=    Cumulocity.Execute Shell Command    set -a; . /etc/tedge-container-plugin/env; docker network create tedge ||:

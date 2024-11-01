@@ -12,7 +12,7 @@
 [ -f /etc/tedge-container-monitor/env ] && . /etc/tedge-container-monitor/env
 
 dir="/var"
-cmd="/usr/bin/tedge-container-monitor run
+cmd="/usr/bin/tedge-container run
 user="root"
 
 name=$(basename "$0")

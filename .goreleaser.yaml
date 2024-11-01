@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-project_name: tedge-container-monitor
+project_name: tedge-container
 version: 2
 
 release:
   prerelease: auto
   draft: true
-  name_template: "tedge-container-monitor {{.Version}}"
+  name_template: "tedge-container-plugin {{.Version}}"
 
 builds:
   - <<: &build_defaults
@@ -14,7 +14,7 @@ builds:
       flags:
         - -trimpath
       ldflags:
-        - -s -w -X github.com/thin-edge/tedge-container-monitor/cmd.buildVersion={{.Version}} -X github.com/thin-edge/tedge-container-monitor/cmd.buildBranch={{.Branch}}
+        - -s -w -X github.com/thin-edge/tedge-container-plugin/cmd.buildVersion={{.Version}} -X github.com/thin-edge/tedge-container-plugin/cmd.buildBranch={{.Branch}}
 
     id: macOS
     goos: [darwin]
@@ -45,7 +45,6 @@ archives:
     format: tar.gz
     files:
       - LICENSE
-      # - defaults/*.yaml
 
   - id: homebrew
     builds: [macOS]
@@ -54,7 +53,6 @@ archives:
     format: tar.gz
     files:
       - LICENSE
-      # - defaults/*.yaml
 
   - id: windows
     builds: [windows]
@@ -63,7 +61,6 @@ archives:
     format: zip
     files:
       - LICENSE
-      # - defaults/*.yaml
   
   - id: plainBinaries
     builds: [macOS, linux, windows]
@@ -74,10 +71,10 @@ archives:
 
 nfpms:
   - 
-    package_name: tedge-container-monitor
+    package_name: tedge-container-plugin
     license: Apache 2.0
     maintainer: thin-edge.io <thinedge@thin-edge.io>
-    homepage: https://github.com/thin-edge/tedge-container-monitor
+    homepage: https://github.com/thin-edge/tedge-container-plugin
     bindir: /usr
     description: thin-edge.io container monitor
     section: utils
@@ -94,11 +91,11 @@ nfpms:
       postremove: ./packaging/scripts/post-remove
 
     contents:
-      - src: /usr/bin/tedge-container-monitor
+      - src: /usr/bin/tedge-container
         dst: /etc/tedge/sm-plugins/container
         type: symlink
 
-      - src: /usr/bin/tedge-container-monitor
+      - src: /usr/bin/tedge-container
         dst: /etc/tedge/sm-plugins/container-group
         type: symlink
 
@@ -119,18 +116,13 @@ nfpms:
 
       # Completions
       - src: ./output/completions.bash
-        dst: /etc/bash_completion.d/tedge-container-monitor
+        dst: /etc/bash_completion.d/tedge-container
       
       - src: ./output/completions.zsh
-        dst: /usr/local/share/zsh/site-functions/_tedge-container-monitor
+        dst: /usr/local/share/zsh/site-functions/_tedge-container
       
       - src: ./output/completions.fish
-        dst: /usr/share/fish/vendor_completions.d/tedge-container-monitor.fish
-      
-      # Addons
-      # - src: routes/*.yaml
-      #   dst: /etc/tedge-mapper-template/routes/
-      #   type: config|noreplace
+        dst: /usr/share/fish/vendor_completions.d/tedge-container.fish
 
 dockers:
   - 

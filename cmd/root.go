@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/thin-edge/tedge-container-monitor/cli/container"
-	"github.com/thin-edge/tedge-container-monitor/cli/container_group"
-	"github.com/thin-edge/tedge-container-monitor/cli/engine"
-	"github.com/thin-edge/tedge-container-monitor/cli/run"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/cli/container"
+	"github.com/thin-edge/tedge-container-plugin/cli/container_group"
+	"github.com/thin-edge/tedge-container-plugin/cli/engine"
+	"github.com/thin-edge/tedge-container-plugin/cli/run"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 )
 
 // Build data
@@ -25,7 +25,7 @@ var buildBranch string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "tedge-container-monitor",
+	Use:   "tedge-container",
 	Short: "A brief description of your application",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:

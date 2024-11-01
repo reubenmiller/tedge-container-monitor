@@ -16,8 +16,8 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/spf13/cobra"
-	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
-	"github.com/thin-edge/tedge-container-monitor/pkg/container"
+	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
+	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 )
 
 var DefaultNetworkName string = "tedge"

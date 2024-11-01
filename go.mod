@@ -1,4 +1,4 @@
-module github.com/thin-edge/tedge-container-monitor
+module github.com/thin-edge/tedge-container-plugin
 
 go 1.23.2
 

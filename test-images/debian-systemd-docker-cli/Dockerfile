@@ -12,7 +12,6 @@ RUN apt-get update \
         # Docker cli
         docker-ce-cli \
         docker-compose-plugin \
-        unzip \
         tedge-container-plugin \
     && tedge config unset c8y.proxy.client.host \
     && tedge config unset mqtt.client.host \

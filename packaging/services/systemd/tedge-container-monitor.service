@@ -4,7 +4,7 @@ After=mosquitto.service
 
 [Service]
 EnvironmentFile=-/etc/tedge-container-monitor/env
-ExecStart=/usr/bin/tedge-container-monitor run
+ExecStart=/usr/bin/tedge-container run
 User=root
 Restart=always
 RestartSec=5

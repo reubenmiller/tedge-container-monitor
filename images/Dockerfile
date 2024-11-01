@@ -1,7 +1,7 @@
 FROM gcr.io/distroless/static-debian12
 WORKDIR /app
-COPY bin/tedge-container-monitor /usr/bin
-ENTRYPOINT [ "/usr/bin/tedge-container-monitor" ]
+COPY bin/tedge-container /usr/bin
+ENTRYPOINT [ "/usr/bin/tedge-container" ]
 
 ENV CONTAINER_LOG_LEVEL=info
 

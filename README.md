@@ -1,6 +1,6 @@
-# tedge-container-monitor
+# tedge-container-plugin
 
-This is a temporary repository which is used for development of a refactored tedge-container-plugin (though just the tedge-container-monitor part).
+This is a temporary repository which is used for development of a refactored tedge-container-plugin.
 
 It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/tedge-container-plugin) once it is proven to be a valuable replacement for the current posix shell implementation.
 

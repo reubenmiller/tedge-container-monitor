@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-project_name: tedge-container-monitor
+project_name: tedge-container
 version: 2
 
 release:
   prerelease: auto
   draft: true
-  name_template: "tedge-container-monitor {{.Version}}"
+  name_template: "tedge-container-plugin {{.Version}}"
 
 builds:
   - <<: &build_defaults
@@ -74,10 +74,10 @@ archives:
 
 nfpms:
   - 
-    package_name: tedge-container-monitor
+    package_name: tedge-container-plugin
     license: Apache 2.0
     maintainer: thin-edge.io <thinedge@thin-edge.io>
-    homepage: https://github.com/thin-edge/tedge-container-monitor
+    homepage: https://github.com/thin-edge/tedge-container-plugin
     bindir: /usr
     description: thin-edge.io container monitor
     section: utils
@@ -94,11 +94,11 @@ nfpms:
       postremove: ./packaging/scripts/post-remove
 
     contents:
-      - src: /usr/bin/tedge-container-monitor
+      - src: /usr/bin/tedge-container
         dst: /etc/tedge/sm-plugins/container
         type: symlink
 
-      - src: /usr/bin/tedge-container-monitor
+      - src: /usr/bin/tedge-container
         dst: /etc/tedge/sm-plugins/container-group
         type: symlink
 

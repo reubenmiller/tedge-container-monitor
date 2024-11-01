@@ -20,6 +20,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
@@ -452,6 +453,81 @@ func (c *ContainerClient) List(ctx context.Context, options FilterOptions) ([]Te
 
 func (c *ContainerClient) MonitorEvents(ctx context.Context) (<-chan events.Message, <-chan error) {
 	return c.Client.Events(context.Background(), events.ListOptions{})
+}
+
+func (c *ContainerClient) runComposeInContainer(ctx context.Context, projectName string, workingDir string) (output []byte, err error) {
+	imageRef := "docker.io/library/docker:27.3.1-cli"
+
+	//
+	// Check and pull image if it is not present
+	images, err := c.Client.ImageList(ctx, image.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", imageRef)),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(images) == 0 {
+		slog.Info("Pulling image.", "ref", imageRef)
+		out, err := c.Client.ImagePull(ctx, imageRef, image.PullOptions{})
+		if err != nil {
+			return nil, err
+		}
+		defer out.Close()
+		if _, ioErr := io.Copy(os.Stderr, out); ioErr != nil {
+			slog.Warn("Could not write to stderr.", "err", ioErr)
+		}
+	} else {
+		slog.Info("Image already exists.", "ref", imageRef, "id", images[0].ID, "tags", images[0].RepoTags)
+	}
+
+	// docker run --privileged --name some-docker -v /my/own/var-lib-docker:/var/lib/docker -t docker.io/library/docker:27.3.1-cli
+	slog.Info("Pulling image.", "ref", imageRef)
+	out, err := c.Client.ImagePull(ctx, imageRef, image.PullOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer out.Close()
+	if _, ioErr := io.Copy(os.Stderr, out); ioErr != nil {
+		slog.Warn("Could not write to stderr.", "err", ioErr)
+	}
+
+	containerCreate, err := c.Client.ContainerCreate(ctx, &container.Config{
+		Image: imageRef,
+	}, &container.HostConfig{
+		AutoRemove: true,
+		Binds: []string{
+			fmt.Sprintf("%s:/var/run/docker.sock", c.Client.DaemonHost()),
+
+			// Mirror host structure so that
+			fmt.Sprintf("%s:%s", workingDir, workingDir),
+		},
+	}, &network.NetworkingConfig{}, nil, "")
+
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("Created container.", "id", containerCreate.ID)
+
+	err = c.Client.ContainerStart(ctx, containerCreate.ID, container.StartOptions{})
+	if err != nil {
+		return
+	}
+
+	conLogs, err := c.Client.ContainerLogs(ctx, containerCreate.ID, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer conLogs.Close()
+
+	if _, ioErr := io.Copy(os.Stderr, conLogs); ioErr != nil {
+		slog.Warn("Could not write to stderr.", "err", ioErr)
+	}
+	return nil, nil
+
 }
 
 // Create shared network

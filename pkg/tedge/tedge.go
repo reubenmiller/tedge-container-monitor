@@ -129,7 +129,7 @@ func CumulocityClientFromConfig(useCerts bool, config *ClientConfig) *c8y.Client
 func NewClient(parent Target, target Target, serviceName string, config *ClientConfig) *Client {
 	opts := mqtt.NewClientOptions()
 	useCerts := fileExists(config.KeyFile) && fileExists(config.CertFile)
-	if useCerts {
+	if useCerts && config.MqttPort != 1883 {
 		slog.Info("Using client certificates to connect to thin-edge.io services")
 		opts.AddBroker(fmt.Sprintf("ssl://%s:%d", config.MqttHost, config.MqttPort))
 		tlsconfig := NewTLSConfig(config.KeyFile, config.CertFile, config.CAFile)

@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-monitor/cli/container"
 	"github.com/thin-edge/tedge-container-monitor/cli/container_group"
+	"github.com/thin-edge/tedge-container-monitor/cli/engine"
 	"github.com/thin-edge/tedge-container-monitor/cli/run"
 	"github.com/thin-edge/tedge-container-monitor/pkg/cli"
 )
@@ -53,14 +54,19 @@ func Execute() {
 
 	err := rootCmd.Execute()
 	if err != nil {
-		slog.Error("Command error", "err", err)
+		switch err.(type) {
+		case cli.SilentError:
+			// Don't log error
+		default:
+			slog.Error("Command error", "err", err)
+		}
 		os.Exit(1)
 	}
 }
 
 func SetLogLevel() error {
 	value := strings.ToLower(viper.GetString("log_level"))
-	slog.Info("Setting log level.", "new", value)
+	slog.Debug("Setting log level.", "new", value)
 	switch value {
 	case "info":
 		slog.SetLogLoggerLevel(slog.LevelInfo)
@@ -81,6 +87,7 @@ func init() {
 		container.NewContainerCommand(cliConfig),
 		container_group.NewContainerGroupCommand(cliConfig),
 		run.NewRunCommand(cliConfig),
+		engine.NewCliCommand(cliConfig),
 	)
 
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level")

@@ -7,15 +7,11 @@ RUN apt-get update \
         podman \
     && DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" -y --no-install-recommends \
         podman-compose \
-        tedge-container-plugin \
     && tedge config unset c8y.proxy.client.host \
     && tedge config unset mqtt.client.host \
     && tedge config unset http.client.host
 
-RUN echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/container-cli" | tee /etc/sudoers.d/tedge-containers \
-    # container settings
-    && echo "DOCKER_HOST=unix:///run/podman/podman.sock" | tee -a /etc/tedge-container-plugin/env \
-    && echo "CONTAINER_LEGACY_STATUS_UPDATE=0" | tee -a /etc/tedge-container-plugin/env
+RUN echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge-container-monitor" | tee /etc/sudoers.d/tedge-containers
 
 COPY dist/*.deb /tmp/
 RUN case ${TARGETPLATFORM} in \

@@ -11,6 +11,7 @@ init-dotenv:
   @echo "Recreating .env file..."
   @echo "DEVICE_ID=$DEVICE_ID" > .env
   @echo "IMAGE=$IMAGE" >> .env
+  @echo "IMAGE_SRC=$IMAGE_SRC" >> .env
   @echo "C8Y_BASEURL=$C8Y_BASEURL" >> .env
   @echo "C8Y_USER=$C8Y_USER" >> .env
   @echo "C8Y_PASSWORD=$C8Y_PASSWORD" >> .env

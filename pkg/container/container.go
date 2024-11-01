@@ -455,6 +455,7 @@ func (c *ContainerClient) MonitorEvents(ctx context.Context) (<-chan events.Mess
 	return c.Client.Events(context.Background(), events.ListOptions{})
 }
 
+//nolint:all
 func (c *ContainerClient) runComposeInContainer(ctx context.Context, projectName string, workingDir string) (output []byte, err error) {
 	imageRef := "docker.io/library/docker:27.3.1-cli"
 

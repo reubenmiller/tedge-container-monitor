@@ -474,6 +474,10 @@ func (c *ContainerClient) CreateSharedNetwork(ctx context.Context, name string) 
 	return nil
 }
 
+func (c *ContainerClient) DockerCommand(args ...string) (string, []string, error) {
+	return prepareDockerCommand(args...)
+}
+
 func (c *ContainerClient) ComposeUp(ctx context.Context, w io.Writer, projectName string, workingDir string, extraArgs ...string) error {
 	slog.Info("Starting compose project.", "name", projectName, "dir", workingDir)
 	command, args, err := prepareComposeCommand("up", "--detach", "--remove-orphans")

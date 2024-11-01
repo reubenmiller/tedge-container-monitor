@@ -14,6 +14,8 @@ import (
 	"github.com/thin-edge/tedge-container-monitor/pkg/tedge"
 )
 
+type SilentError error
+
 type Cli struct {
 	ConfigFile string
 }

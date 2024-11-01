@@ -2,8 +2,8 @@ set dotenv-load
 set export
 
 DEVICE_ID := env_var_or_default("DEVICE_ID", "CI_" + file_name(home_directory()) + "_tedge-container-plugin" )
-IMAGE := env_var_or_default("IMAGE", "debian-systemd")
-IMAGE_SRC := env_var_or_default("IMAGE_SRC", "debian-systemd")
+IMAGE := env_var_or_default("IMAGE", "debian-systemd-docker-cli")
+IMAGE_SRC := env_var_or_default("IMAGE_SRC", "debian-systemd-docker-cli")
 
 # Initialize a dotenv file for usage with a local debugger
 # WARNING: It will override any previously generated dotenv file

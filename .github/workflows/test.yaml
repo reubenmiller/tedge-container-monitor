@@ -39,7 +39,8 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { image: debian-systemd }
+          - { image: debian-systemd-docker-cli }
+          - { image: debian-systemd-podman-cli }
 
     steps:
       - name: Checkout

@@ -3,8 +3,8 @@ Description=thin-edge.io container monitor
 After=mosquitto.service
 
 [Service]
-EnvironmentFile=-/etc/tedge-container-monitor/env
-ExecStart=/usr/bin/tedge-container run
+EnvironmentFile=-/etc/tedge-container-plugin/env
+ExecStart=/usr/bin/tedge-container run --config /etc/tedge-container-plugin/config.yaml
 User=root
 Restart=always
 RestartSec=5

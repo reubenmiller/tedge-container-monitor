@@ -45,7 +45,6 @@ archives:
     format: tar.gz
     files:
       - LICENSE
-      # - defaults/*.yaml
 
   - id: homebrew
     builds: [macOS]
@@ -54,7 +53,6 @@ archives:
     format: tar.gz
     files:
       - LICENSE
-      # - defaults/*.yaml
 
   - id: windows
     builds: [windows]
@@ -63,7 +61,6 @@ archives:
     format: zip
     files:
       - LICENSE
-      # - defaults/*.yaml
   
   - id: plainBinaries
     builds: [macOS, linux, windows]
@@ -119,18 +116,13 @@ nfpms:
 
       # Completions
       - src: ./output/completions.bash
-        dst: /etc/bash_completion.d/tedge-container-monitor
+        dst: /etc/bash_completion.d/tedge-container
       
       - src: ./output/completions.zsh
-        dst: /usr/local/share/zsh/site-functions/_tedge-container-monitor
+        dst: /usr/local/share/zsh/site-functions/_tedge-container
       
       - src: ./output/completions.fish
-        dst: /usr/share/fish/vendor_completions.d/tedge-container-monitor.fish
-      
-      # Addons
-      # - src: routes/*.yaml
-      #   dst: /etc/tedge-mapper-template/routes/
-      #   type: config|noreplace
+        dst: /usr/share/fish/vendor_completions.d/tedge-container.fish
 
 dockers:
   - 

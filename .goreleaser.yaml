@@ -107,7 +107,7 @@ nfpms:
 
       # Config
       - src: ./packaging/config.*
-        dst: /etc/tedge-container-plugin/config.yaml
+        dst: /etc/tedge-container-plugin/
         file_info:
           mode: 0644
           owner: tedge

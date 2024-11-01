@@ -9,10 +9,10 @@
 # Description:       Monitor container running on the device
 ### END INIT INFO
 
-[ -f /etc/tedge-container-monitor/env ] && . /etc/tedge-container-monitor/env
+[ -f /etc/tedge-container-plugin/env ] && . /etc/tedge-container-plugin/env
 
 dir="/var"
-cmd="/usr/bin/tedge-container run
+cmd="/usr/bin/tedge-container run /usr/bin/tedge-container run --config /etc/tedge-container-plugin/config.yaml"
 user="root"
 
 name=$(basename "$0")

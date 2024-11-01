@@ -105,6 +105,14 @@ nfpms:
         dst: /etc/tedge/sm-plugins/container-group
         type: symlink
 
+      # Config
+      - src: ./packaging/config.*
+        dst: /etc/tedge-container-plugin/config.yaml
+        file_info:
+          mode: 0644
+          owner: tedge
+          group: tedge
+
       # Services
       - src: ./packaging/services/systemd/tedge-container-monitor.service
         dst: /usr/lib/systemd/system/tedge-container-monitor.service
@@ -114,7 +122,7 @@ nfpms:
           group: tedge
 
       - src: ./packaging/services/init.d/service.init
-        dst: /etc/init.d/tedge-mapper-template
+        dst: /etc/init.d/tedge-container-monitor
         file_info:
           mode: 0644
           owner: tedge

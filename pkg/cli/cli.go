@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 	"github.com/thin-edge/tedge-container-plugin/pkg/tedge"
+	"github.com/thin-edge/tedge-container-plugin/pkg/utils"
 )
 
 type SilentError error
@@ -21,7 +22,7 @@ type Cli struct {
 }
 
 func (c *Cli) OnInit() {
-	if c.ConfigFile != "" {
+	if c.ConfigFile != "" && utils.PathExists(c.ConfigFile) {
 		// Use config file from the flag.
 		viper.SetConfigFile(c.ConfigFile)
 	} else {

@@ -11,12 +11,27 @@ monitor:
       names: ["^buildx.*"]
       labels: []
 
+  mqtt:
+    client:
+      host: 127.0.0.1
+      port: 8883
+
+  c8y:
+    proxy:
+      client:
+        host: 127.0.0.1
+        port: 8001
+
+  client:
+    key: /etc/tedge/device-certs/local-tedge.key
+    cert_file: /etc/tedge/device-certs/local-tedge.crt
+
   # mqtt:
   #   topic_root: te
   #   device_topic_id: device/main//
 
   metrics:
-    enabled: false
+    enabled: true
   
   events:
     enabled: true

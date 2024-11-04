@@ -15,6 +15,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 	"github.com/thin-edge/tedge-container-plugin/pkg/tedge"
+	"github.com/tidwall/gjson"
 )
 
 type Action int
@@ -22,7 +23,52 @@ type Action int
 const (
 	ActionUpdateAll Action = iota
 	ActionUpdateMetrics
+	ActionContainerAction
 )
+
+type ContainerAction int
+
+const (
+	ActionContainerRestart ContainerAction = iota
+	ActionContainerStop
+	ActionContainerStart
+	ActionContainerPause
+	ActionContainerUnpause
+)
+
+func NewContainerAction(v string) ContainerAction {
+	switch v {
+	case "start":
+		return ActionContainerStart
+	case "stop":
+		return ActionContainerStop
+	case "pause":
+		return ActionContainerPause
+	case "unpause":
+		return ActionContainerUnpause
+	case "restart":
+		return ActionContainerRestart
+	default:
+		return ActionContainerRestart
+	}
+}
+
+func (ca ContainerAction) String() string {
+	switch ca {
+	case ActionContainerStart:
+		return "start"
+	case ActionContainerStop:
+		return "stop"
+	case ActionContainerPause:
+		return "pause"
+	case ActionContainerUnpause:
+		return "unpause"
+	case ActionContainerRestart:
+		return "restart"
+	default:
+		return "restart"
+	}
+}
 
 type ActionRequest struct {
 	Action  Action
@@ -40,6 +86,20 @@ func NewUpdateMetricsAction(filter container.FilterOptions) ActionRequest {
 	return ActionRequest{
 		Action:  ActionUpdateMetrics,
 		Options: filter,
+	}
+}
+
+type ContainerActionOptions struct {
+	Action    ContainerAction
+	Container string
+	Topic     string
+	Payload   map[string]any
+}
+
+func NewContainerActionRequest(options ContainerActionOptions) ActionRequest {
+	return ActionRequest{
+		Action:  ActionContainerAction,
+		Options: options,
 	}
 }
 
@@ -129,6 +189,7 @@ func NewApp(device tedge.Target, config Config) (*App, error) {
 	// Start background task to process requests
 	application.wg.Add(1)
 	go application.worker()
+	application.Subscribe()
 
 	return application, nil
 }
@@ -152,6 +213,68 @@ func (a *App) Subscribe() error {
 				}
 				a.updateRequests <- NewUpdateAllAction(opts)
 			}(parts[4])
+		}
+	})
+
+	// Subscribe to operations
+	containerActionTopic := tedge.GetTopic(*a.Device.Service("+"), "cmd", "run_container_action", "+")
+	a.client.Client.AddRoute(containerActionTopic, func(c mqtt.Client, m mqtt.Message) {
+		if len(m.Payload()) == 0 {
+			// ignore clearing of retained messages
+			return
+		}
+
+		status := gjson.GetBytes(m.Payload(), "status").String()
+		action := gjson.GetBytes(m.Payload(), "action").String()
+
+		payload := make(map[string]any)
+		if err := json.Unmarshal(m.Payload(), &payload); err != nil {
+			slog.Warn("Invalid command payload.", "err", err)
+			return
+		}
+
+		slog.Info("Received command to execute container action.", "topic", m.Topic(), "payload", m.Payload())
+
+		if status != "init" {
+			// Ignore non init status updates
+			return
+		}
+
+		target, err := tedge.NewTargetFromTopic(m.Topic())
+		if err != nil {
+			slog.Warn("Failed to parse topic.", "err", err)
+			return
+		}
+
+		// Lookup the container id from the service name
+		targetContainerID := ""
+		if entity, found := a.client.Entities[target.Topic()]; found {
+			if serviceType, ok := entity.(map[string]any)["type"].(string); ok {
+				switch serviceType {
+				case container.ContainerType:
+					if containerName, ok := entity.(map[string]any)["containerId"].(string); ok {
+						targetContainerID = containerName
+					}
+				case container.ContainerGroupType:
+					if containerName, ok := entity.(map[string]any)["containerId"].(string); ok {
+						targetContainerID = containerName
+					}
+				}
+			}
+			slog.Info("Found entity.", "entity", entity)
+		}
+
+		if targetContainerID != "" {
+			slog.Info("Received request to run container action.", "topic", m.Topic(), "containerID", targetContainerID)
+			go func(containerID string) {
+				opts := ContainerActionOptions{
+					Action:    NewContainerAction(action),
+					Container: containerID,
+					Topic:     m.Topic(),
+					Payload:   payload,
+				}
+				a.updateRequests <- NewContainerActionRequest(opts)
+			}(targetContainerID)
 		}
 	})
 
@@ -193,6 +316,28 @@ func (a *App) worker() {
 					if updateErr := a.updateMetrics(items); updateErr != nil {
 						slog.Warn("Error updating metrics.", "err", updateErr)
 					}
+				}
+			case ActionContainerAction:
+				containerOpts := opts.Options.(ContainerActionOptions)
+				doAction := func() error {
+					var actionErr error
+					ctx := context.Background()
+					switch containerOpts.Action {
+					case ActionContainerStart:
+						actionErr = a.ContainerClient.StartContainer(ctx, containerOpts.Container)
+					case ActionContainerRestart:
+						actionErr = a.ContainerClient.RestartContainer(ctx, containerOpts.Container)
+					case ActionContainerStop:
+						actionErr = a.ContainerClient.StopContainer(ctx, containerOpts.Container)
+					case ActionContainerPause:
+						actionErr = a.ContainerClient.PauseContainer(ctx, containerOpts.Container)
+					case ActionContainerUnpause:
+						actionErr = a.ContainerClient.UnPauseContainer(ctx, containerOpts.Container)
+					}
+					return actionErr
+				}
+				if err := a.client.RunCommandWithUpdates(containerOpts.Topic, containerOpts.Payload, doAction); err != nil {
+					slog.Warn("Command failed.", "err", err)
 				}
 			}
 
@@ -389,13 +534,16 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		return err
 	}
 
+	// TODO: Register individual services if the data model changes
+	repeatRegistration := true
+
 	// Register devices
 	slog.Info("Registering containers")
 	for _, item := range items {
 		target := a.Device.Service(item.Name)
 
 		// Skip registration message if it already exists
-		if _, ok := existingServices[target.Topic()]; ok {
+		if _, ok := existingServices[target.Topic()]; ok && !repeatRegistration {
 			slog.Debug("Container is already registered", "topic", target.Topic())
 			delete(existingServices, target.Topic())
 			continue
@@ -403,9 +551,11 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		delete(existingServices, target.Topic())
 
 		payload := map[string]any{
-			"@type": "service",
-			"name":  item.Name,
-			"type":  item.ServiceType,
+			"@type":       "service",
+			"name":        item.Name,
+			"type":        item.ServiceType,
+			"containerId": item.Container.Id,
+			"projectName": item.Container.ProjectName,
 		}
 		b, err := json.Marshal(payload)
 		if err != nil {

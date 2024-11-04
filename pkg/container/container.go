@@ -302,6 +302,26 @@ func (c *ContainerClient) GetStats(ctx context.Context, containerID string) (*Co
 	return stats, nil
 }
 
+func (c *ContainerClient) StartContainer(ctx context.Context, containerID string) error {
+	return c.Client.ContainerStart(ctx, containerID, container.StartOptions{})
+}
+
+func (c *ContainerClient) StopContainer(ctx context.Context, containerID string) error {
+	return c.Client.ContainerStop(ctx, containerID, container.StopOptions{})
+}
+
+func (c *ContainerClient) RestartContainer(ctx context.Context, containerID string) error {
+	return c.Client.ContainerRestart(ctx, containerID, container.StopOptions{})
+}
+
+func (c *ContainerClient) PauseContainer(ctx context.Context, containerID string) error {
+	return c.Client.ContainerPause(ctx, containerID)
+}
+
+func (c *ContainerClient) UnPauseContainer(ctx context.Context, containerID string) error {
+	return c.Client.ContainerUnpause(ctx, containerID)
+}
+
 type FilterOptions struct {
 	Names  []string
 	Labels []string

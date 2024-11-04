@@ -42,6 +42,15 @@ func PayloadRegistration(payload map[string]any, name string, entityType string,
 	return b, err
 }
 
+func PayloadCommand(payload map[string]any, status string, failureReason ...string) ([]byte, error) {
+	payload["status"] = status
+	if len(failureReason) > 0 {
+		payload["failureReason"] = failureReason[0]
+	}
+	b, err := json.Marshal(payload)
+	return b, err
+}
+
 type Client struct {
 	Parent           Target
 	ServiceName      string
@@ -172,6 +181,7 @@ func NewClient(parent Target, target Target, serviceName string, config *ClientC
 		subscriptions := make(map[string]byte)
 		subscriptions[target.RootPrefix+"/+/+/+/+"] = 1
 		subscriptions[GetTopic(*target.Service("+"), "cmd", "health", "check")] = 1
+		subscriptions[GetTopic(*target.Service("+"), "cmd", "run_container_action", "+")] = 1
 		slog.Info("Subscribing to topics.", "topics", subscriptions)
 		tok = c.SubscribeMultiple(subscriptions, nil)
 		tok.Wait()
@@ -268,6 +278,31 @@ func (c *Client) Publish(topic string, qos byte, retained bool, payload any) err
 		return fmt.Errorf("timed out")
 	}
 	return tok.Error()
+}
+
+func (c *Client) updateCommandStatus(topic string, payload map[string]any, status string, failureReason ...string) error {
+	b, err := PayloadCommand(payload, status, failureReason...)
+	if err != nil {
+		return err
+	}
+	return c.Publish(topic, 1, true, b)
+}
+
+func (c *Client) RunCommandWithUpdates(topic string, payload map[string]any, action func() error) error {
+	if err := c.updateCommandStatus(topic, payload, "executing"); err != nil {
+		slog.Warn("Could not publish command update.", "err", err)
+	}
+	var err error
+	cmdErr := action()
+	if cmdErr != nil {
+		err = c.updateCommandStatus(topic, payload, "failed", cmdErr.Error())
+	} else {
+		err = c.updateCommandStatus(topic, payload, "successful")
+	}
+	if err != nil {
+		slog.Warn("Could not publish command update.", "err", err)
+	}
+	return cmdErr
 }
 
 // Deregister a thin-edge.io entity

@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 	"github.com/thin-edge/tedge-container-plugin/pkg/tedge"
 	"github.com/thin-edge/tedge-container-plugin/pkg/utils"
 )
+
+var LinuxConfigFilePath = "/etc/tedge-container-plugin/config.toml"
 
 type SilentError error
 
@@ -26,14 +27,19 @@ func (c *Cli) OnInit() {
 		// Use config file from the flag.
 		viper.SetConfigFile(c.ConfigFile)
 	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
+		if home, err := os.UserHomeDir(); err == nil {
+			// Add home directory.
+			viper.AddConfigPath(home)
+		}
 
-		// Search config in home directory with name ".cobra" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".tedge-container")
+		if utils.PathExists(LinuxConfigFilePath) {
+			viper.SetConfigFile(LinuxConfigFilePath)
+		} else {
+			// Search config in home directory with name ".cobra" (without extension).
+			viper.SetConfigType("yaml")
+			viper.SetConfigType("toml")
+			viper.SetConfigName(".tedge-container-plugin")
+		}
 	}
 
 	viper.SetEnvPrefix("CONTAINER")

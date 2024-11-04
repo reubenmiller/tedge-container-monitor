@@ -147,7 +147,8 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 
 	// thin-edge.io services
 	viper.SetDefault("client.mqtt.host", "127.0.0.1")
-	viper.SetDefault("client.mqtt.port", "1883")
+	// client.mqtt.port: 0 = auto-detection, where 8883 is used when the cert files exist, or 1883 otherwise
+	viper.SetDefault("client.mqtt.port", "0")
 	viper.SetDefault("client.c8y.host", "127.0.0.1")
 	viper.SetDefault("client.c8y.port", "8001")
 

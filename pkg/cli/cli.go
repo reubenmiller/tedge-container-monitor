@@ -117,6 +117,9 @@ func (c *Cli) GetMetricsInterval() time.Duration {
 func (c *Cli) GetMQTTPort() uint16 {
 	v := viper.GetUint16("client.mqtt.port")
 	if v == 0 {
+		if utils.PathExists(c.GetCertificateFile()) && utils.PathExists(c.GetKeyFile()) {
+			return 8883
+		}
 		return 1883
 	}
 	return v

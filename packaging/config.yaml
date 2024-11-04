@@ -17,7 +17,8 @@ client:
 
   mqtt:
     host: 127.0.0.1
-    port: 8883
+    # 0 = auto-detection, either 8883 when using certificates, or 1883 (no certificates)
+    port: 0
 
   c8y:
     host: 127.0.0.1

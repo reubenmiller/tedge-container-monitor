@@ -62,68 +62,71 @@ func (c *Cli) PrintConfig() {
 }
 
 func (c *Cli) GetServiceName() string {
-	return viper.GetString("monitor.service_name")
+	return viper.GetString("service_name")
 }
 
 func (c *Cli) GetKeyFile() string {
-	return viper.GetString("monitor.client.key")
+	return viper.GetString("client.key")
 }
 
 func (c *Cli) GetCertificateFile() string {
-	return viper.GetString("monitor.client.cert_file")
+	return viper.GetString("client.cert_file")
 }
 
 func (c *Cli) GetCAFile() string {
-	return viper.GetString("monitor.client.ca_file")
+	return viper.GetString("client.ca_file")
 }
 
 func (c *Cli) GetTopicRoot() string {
-	return viper.GetString("monitor.mqtt.topic_root")
+	return viper.GetString("topic_root")
 }
 
 func (c *Cli) GetTopicID() string {
-	return viper.GetString("monitor.mqtt.device_topic_id")
+	return viper.GetString("topic_id")
 }
 
 func (c *Cli) GetDeviceID() string {
-	return viper.GetString("monitor.mqtt.device_id")
+	return viper.GetString("device_id")
 }
 
 func (c *Cli) MetricsEnabled() bool {
-	return viper.GetBool("monitor.metrics.enabled")
+	return viper.GetBool("metrics.enabled")
 }
 
 func (c *Cli) EngineEventsEnabled() bool {
-	return viper.GetBool("monitor.events.enabled")
+	return viper.GetBool("events.enabled")
 }
 
 func (c *Cli) DeleteFromCloud() bool {
-	return viper.GetBool("monitor.delete_from_cloud.enabled")
+	return viper.GetBool("delete_from_cloud.enabled")
 }
 
 func (c *Cli) GetMQTTHost() string {
-	return viper.GetString("monitor.mqtt.client.host")
+	return viper.GetString("client.mqtt.host")
 }
 
 func (c *Cli) GetMetricsInterval() time.Duration {
-	interval := viper.GetDuration("monitor.metrics.interval")
+	interval := viper.GetDuration("metrics.interval")
 	if interval < 60*time.Second {
-		slog.Warn("monitor.metrics.interval is lower than allowed limit.", "old", interval, "new", 60*time.Second)
+		slog.Warn("metrics.interval is lower than allowed limit.", "old", interval, "new", 60*time.Second)
 		interval = 60 * time.Second
 	}
 	return interval
 }
 
 func (c *Cli) GetMQTTPort() uint16 {
-	v := viper.GetUint16("monitor.mqtt.client.port")
+	v := viper.GetUint16("client.mqtt.port")
 	if v == 0 {
+		if utils.PathExists(c.GetCertificateFile()) && utils.PathExists(c.GetKeyFile()) {
+			return 8883
+		}
 		return 1883
 	}
 	return v
 }
 
 func (c *Cli) GetCumulocityHost() string {
-	return viper.GetString("monitor.c8y.proxy.client.host")
+	return viper.GetString("client.c8y.host")
 }
 
 func (c *Cli) GetCumulocityPort() uint16 {
@@ -153,12 +156,12 @@ func getExpandedStringSlice(key string) []string {
 
 func (c *Cli) GetFilterOptions() container.FilterOptions {
 	options := container.FilterOptions{
-		Names:            getExpandedStringSlice("monitor.filter.include.names"),
-		IDs:              getExpandedStringSlice("monitor.filter.include.ids"),
-		Labels:           getExpandedStringSlice("monitor.filter.include.labels"),
-		Types:            getExpandedStringSlice("monitor.filter.include.types"),
-		ExcludeNames:     getExpandedStringSlice("monitor.filter.exclude.names"),
-		ExcludeWithLabel: getExpandedStringSlice("monitor.filter.exclude.labels"),
+		Names:            getExpandedStringSlice("filter.include.names"),
+		IDs:              getExpandedStringSlice("filter.include.ids"),
+		Labels:           getExpandedStringSlice("filter.include.labels"),
+		Types:            getExpandedStringSlice("filter.include.types"),
+		ExcludeNames:     getExpandedStringSlice("filter.exclude.names"),
+		ExcludeWithLabel: getExpandedStringSlice("filter.exclude.labels"),
 	}
 	return options
 }

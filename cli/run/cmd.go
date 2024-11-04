@@ -106,8 +106,8 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 	cmd.Flags().StringSlice("label", []string{}, "Only include containers with the given labels")
 	cmd.Flags().StringSlice("id", []string{}, "Only include containers with the given ids")
 	cmd.Flags().StringSlice("type", []string{container.ContainerType, container.ContainerGroupType}, "Filter by container type")
-	cmd.Flags().String("mqtt-topic-root", DefaultTopicRoot, "MQTT root prefix")
-	cmd.Flags().String("mqtt-device-topic-id", DefaultTopicPrefix, "The device MQTT topic identifier")
+	cmd.Flags().String("topic-root", DefaultTopicRoot, "MQTT root prefix")
+	cmd.Flags().String("topic-id", DefaultTopicPrefix, "The device MQTT topic identifier")
 	cmd.Flags().BoolVar(&command.RunOnce, "once", false, "Only run the monitor once")
 	cmd.Flags().String("device-id", "", "thin-edge.io device id")
 	cmd.Flags().Duration("interval", 300*time.Second, "Metrics update interval")
@@ -116,45 +116,46 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 	// viper bindings
 
 	// Service
-	viper.SetDefault("monitor.service_name", DefaultServiceName)
-	_ = viper.BindPFlag("monitor.service_name", cmd.Flags().Lookup("service-name"))
+	viper.SetDefault("service_name", DefaultServiceName)
+	_ = viper.BindPFlag("service_name", cmd.Flags().Lookup("service-name"))
 
 	// MQTT topics
-	viper.SetDefault("monitor.mqtt.topic_root", DefaultTopicRoot)
-	_ = viper.BindPFlag("monitor.mqtt.topic_root", cmd.Flags().Lookup("mqtt-topic-root"))
-	viper.SetDefault("monitor.mqtt.device_topic_id", DefaultTopicPrefix)
-	_ = viper.BindPFlag("monitor.mqtt.device_topic_id", cmd.Flags().Lookup("mqtt-device-topic-id"))
-	_ = viper.BindPFlag("monitor.mqtt.device_id", cmd.Flags().Lookup("device-id"))
+	viper.SetDefault("topic_root", DefaultTopicRoot)
+	_ = viper.BindPFlag("topic_root", cmd.Flags().Lookup("topic-root"))
+	viper.SetDefault("topic_id", DefaultTopicPrefix)
+	_ = viper.BindPFlag("topic_id", cmd.Flags().Lookup("topic-id"))
+	_ = viper.BindPFlag("device_id", cmd.Flags().Lookup("device-id"))
 
 	// Include filters
-	_ = viper.BindPFlag("monitor.filter.include.names", cmd.Flags().Lookup("name"))
-	_ = viper.BindPFlag("monitor.filter.include.labels", cmd.Flags().Lookup("label"))
-	_ = viper.BindPFlag("monitor.filter.include.ids", cmd.Flags().Lookup("id"))
-	_ = viper.BindPFlag("monitor.filter.include.types", cmd.Flags().Lookup("type"))
+	_ = viper.BindPFlag("filter.include.names", cmd.Flags().Lookup("name"))
+	_ = viper.BindPFlag("filter.include.labels", cmd.Flags().Lookup("label"))
+	_ = viper.BindPFlag("filter.include.ids", cmd.Flags().Lookup("id"))
+	_ = viper.BindPFlag("filter.include.types", cmd.Flags().Lookup("type"))
 
 	// Exclude filters
-	viper.SetDefault("monitor.filter.exclude.names", "")
-	viper.SetDefault("monitor.filter.exclude.labels", "")
+	viper.SetDefault("filter.exclude.names", "")
+	viper.SetDefault("filter.exclude.labels", "")
 
 	// Metrics
-	_ = viper.BindPFlag("monitor.metrics.interval", cmd.Flags().Lookup("interval"))
-	viper.SetDefault("monitor.metrics.interval", "300s")
-	viper.SetDefault("monitor.metrics.enabled", true)
+	_ = viper.BindPFlag("metrics.interval", cmd.Flags().Lookup("interval"))
+	viper.SetDefault("metrics.interval", "300s")
+	viper.SetDefault("metrics.enabled", true)
 
 	// Feature flags
-	viper.SetDefault("monitor.events.enabled", true)
-	viper.SetDefault("monitor.delete_from_cloud.enabled", true)
+	viper.SetDefault("events.enabled", true)
+	viper.SetDefault("delete_from_cloud.enabled", true)
 
 	// thin-edge.io services
-	viper.SetDefault("monitor.mqtt.client.host", "127.0.0.1")
-	viper.SetDefault("monitor.mqtt.client.port", "1883")
-	viper.SetDefault("monitor.c8y.proxy.client.host", "127.0.0.1")
-	viper.SetDefault("monitor.c8y.proxy.client.port", "8001")
+	viper.SetDefault("client.mqtt.host", "127.0.0.1")
+	// client.mqtt.port: 0 = auto-detection, where 8883 is used when the cert files exist, or 1883 otherwise
+	viper.SetDefault("client.mqtt.port", "0")
+	viper.SetDefault("client.c8y.host", "127.0.0.1")
+	viper.SetDefault("client.c8y.port", "8001")
 
 	// TLS
-	viper.SetDefault("monitor.client.key", "")
-	viper.SetDefault("monitor.client.cert_file", "")
-	viper.SetDefault("monitor.client.ca_file", "")
+	viper.SetDefault("client.key", "")
+	viper.SetDefault("client.cert_file", "")
+	viper.SetDefault("client.ca_file", "")
 
 	command.Command = cmd
 	return cmd

@@ -5,6 +5,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -74,17 +75,23 @@ func NewRunCommand(cliContext cli.Cli) *cobra.Command {
 				return application.Update(cliContext.GetFilterOptions())
 			}
 
-			if err := application.Update(cliContext.GetFilterOptions()); err != nil {
-				slog.Warn("Failed to update container state.", "err", err)
-			}
-
 			stop := make(chan os.Signal, 1)
 			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 			// Start background monitor
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
-				_ = application.Monitor(ctx, container.FilterOptions{})
+				for {
+					slog.Info("Monitor container engine events")
+					err := application.Monitor(ctx, cliContext.GetFilterOptions())
+					if errors.Is(err, context.Canceled) {
+						return
+					}
+					if err != nil {
+						slog.Warn("Monitor stopped. Restarting after 2 seconds.", "err", err)
+						time.Sleep(2 * time.Second)
+					}
+				}
 			}()
 
 			if cliContext.MetricsEnabled() {

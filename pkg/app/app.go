@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -246,6 +247,11 @@ func getEventAttributes(attr map[string]string, props ...string) []string {
 func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions) error {
 	evtCh, errCh := a.ContainerClient.MonitorEvents(ctx)
 
+	// Update after subscribing to the events but before reacting to them
+	if err := a.Update(filterOptions); err != nil {
+		slog.Warn("Error updating container state.", "err", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -300,7 +306,12 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 
 			slog.Info("Received event.", "value", evt)
 		case err := <-errCh:
-			slog.Info("Received error.", "value", err)
+			if errors.Is(err, io.EOF) {
+				slog.Info("No more events")
+			} else {
+				slog.Warn("Received error.", "value", err)
+			}
+			return err
 		}
 	}
 }

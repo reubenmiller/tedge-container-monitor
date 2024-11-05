@@ -461,13 +461,6 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		}
 	}
 
-	// Update metrics
-	if a.config.EnableMetrics {
-		if err := a.updateMetrics(items); err != nil {
-			slog.Warn("Error updating metrics.", "err", err)
-		}
-	}
-
 	// Delete removed values, via MQTT and c8y API
 	markedForDeletion := make([]tedge.Target, 0)
 	if removeStaleServices {

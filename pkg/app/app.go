@@ -473,10 +473,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 				continue
 			}
 
-			if err := tedgeClient.Publish(tedge.GetTopic(*target, "twin", "container"), 1, true, ""); err != nil {
-				return err
-			}
-			if err := tedgeClient.DeregisterEntity(*target); err != nil {
+			if err := tedgeClient.DeregisterEntity(*target, "twin/container"); err != nil {
 				slog.Warn("Failed to deregister entity.", "err", err)
 			}
 

@@ -272,10 +272,20 @@ func (c *Client) Publish(topic string, qos byte, retained bool, payload any) err
 
 // Deregister a thin-edge.io entity
 // Clear the status health topic as well as the registration topic
-func (c *Client) DeregisterEntity(target Target) error {
+func (c *Client) DeregisterEntity(target Target, retainedTopicPartials ...string) error {
+	delay := 500 * time.Millisecond
+	// Clear any additional topics with retained messages before deregistering
+	for _, topicPartial := range retainedTopicPartials {
+		if err := c.Publish(GetTopic(target, topicPartial), 1, true, ""); err != nil {
+			return err
+		}
+		time.Sleep(delay)
+	}
+
 	if err := c.Publish(GetTopic(target, "status", "health"), 1, true, ""); err != nil {
 		return err
 	}
+	time.Sleep(delay)
 
 	if err := c.Publish(GetTopic(target), 1, true, ""); err != nil {
 		return err

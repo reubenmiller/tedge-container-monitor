@@ -25,7 +25,7 @@ cert_file = "/etc/tedge/device-certs/local-tedge.crt"
   port = 8_001
 
 [metrics]
-enabled = true
+enabled = false
 interval = "300s"
 
 [events]

@@ -281,18 +281,22 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 
 				switch evt.Action {
 				case events.ActionCreate, events.ActionStart, events.ActionStop, events.ActionPause, events.ActionUnPause, events.ActionExecDie:
-					if err := a.Update(container.FilterOptions{
-						IDs: []string{evt.Actor.ID},
-					}); err != nil {
-						slog.Warn("Error updating container state.", "err", err)
-					}
+					go func() {
+						if err := a.Update(container.FilterOptions{
+							IDs: []string{evt.Actor.ID},
+						}); err != nil {
+							slog.Warn("Error updating container state.", "err", err)
+						}
+					}()
 				case events.ActionDestroy, events.ActionRemove, events.ActionDie:
 					slog.Info("Container removed/destroyed", "container", evt.Actor.ID, "attributes", evt.Actor.Attributes)
 					// TODO: Trigger a removal instead of checking the whole state
 					// Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
-					if err := a.Update(container.FilterOptions{}); err != nil {
-						slog.Warn("Error updating container state.", "err", err)
-					}
+					go func() {
+						if err := a.Update(container.FilterOptions{}); err != nil {
+							slog.Warn("Error updating container state.", "err", err)
+						}
+					}()
 				}
 
 				if a.config.EnableEngineEvents {

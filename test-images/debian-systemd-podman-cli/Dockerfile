@@ -11,7 +11,8 @@ RUN apt-get update \
     && tedge config unset mqtt.client.host \
     && tedge config unset http.client.host
 
-RUN echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge-container" | tee /etc/sudoers.d/tedge-containers
+RUN echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge-container" | tee /etc/sudoers.d/tedge-containers \
+    && echo "CONTAINER_METRICS_INTERVAL=60s" | tee -a /etc/tedge-container-plugin/env
 
 COPY dist/*.deb /tmp/
 RUN case ${TARGETPLATFORM} in \

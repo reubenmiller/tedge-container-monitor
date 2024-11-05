@@ -139,8 +139,7 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 		&containerSDK.HostConfig{
 			PublishAllPorts: true,
 			RestartPolicy: containerSDK.RestartPolicy{
-				Name:              containerSDK.RestartPolicyOnFailure,
-				MaximumRetryCount: 5,
+				Name: containerSDK.RestartPolicyAlways,
 			},
 		},
 		&network.NetworkingConfig{

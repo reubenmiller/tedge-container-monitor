@@ -177,10 +177,13 @@ func backgroundMetric(ctx context.Context, cliContext cli.Cli, application *app.
 			return ctx.Err()
 
 		case <-timerCh.C:
-			slog.Info("Refreshing metrics")
-			if err := application.UpdateMetrics(cliContext.GetFilterOptions()); err != nil {
-				slog.Warn("Error updating metrics.", "err", err)
-			}
+			go func() {
+				slog.Info("Refreshing metrics")
+				if err := application.UpdateMetrics(cliContext.GetFilterOptions()); err != nil {
+					slog.Warn("Error updating metrics.", "err", err)
+				}
+			}()
+
 		}
 	}
 }

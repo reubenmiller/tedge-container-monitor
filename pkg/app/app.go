@@ -282,6 +282,8 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 				switch evt.Action {
 				case events.ActionCreate, events.ActionStart, events.ActionStop, events.ActionPause, events.ActionUnPause, events.ActionExecDie:
 					go func() {
+						// Delay before trigger update to allow the service status to be updated
+						time.Sleep(500 * time.Millisecond)
 						if err := a.Update(container.FilterOptions{
 							IDs: []string{evt.Actor.ID},
 						}); err != nil {
@@ -293,6 +295,8 @@ func (a *App) Monitor(ctx context.Context, filterOptions container.FilterOptions
 					// TODO: Trigger a removal instead of checking the whole state
 					// Lookup container name by container id (from the entity store) as lookup by name won't work for container-groups
 					go func() {
+						// Delay before trigger update to allow the service status to be updated
+						time.Sleep(500 * time.Millisecond)
 						if err := a.Update(container.FilterOptions{}); err != nil {
 							slog.Warn("Error updating container state.", "err", err)
 						}
@@ -435,6 +439,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 			continue
 		}
 		topic := tedge.GetHealthTopic(*target)
+		slog.Info("Publishing container health status", "topic", topic, "payload", b)
 		if err := tedgeClient.Publish(topic, 1, true, b); err != nil {
 			slog.Error("Failed to update health status", "target", topic, "err", err)
 		}
@@ -448,7 +453,6 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 		topic := tedge.GetTopic(*target, "twin", "container")
 
 		// Create status
-		slog.Info("Publishing container status", "topic", topic)
 		payload, err := json.Marshal(item.Container)
 
 		if err != nil {
@@ -456,6 +460,7 @@ func (a *App) doUpdate(filterOptions container.FilterOptions) error {
 			continue
 		}
 
+		slog.Info("Publishing container status", "topic", topic, "payload", payload)
 		if err := tedgeClient.Publish(topic, 1, true, payload); err != nil {
 			slog.Error("Could not publish container status", "err", err)
 		}

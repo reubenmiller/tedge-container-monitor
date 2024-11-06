@@ -78,6 +78,16 @@ Manual container creation/deletion
     Should Contain    ${operation.to_json()["c8y_Command"]["result"]}    It works!
     Cumulocity.Should Have Services    name=manualapp1    service_type=container    status=up
 
+    # Pause
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker pause manualapp1;
+    Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Have Services    name=manualapp1    service_type=container    status=down
+
+    # Unpause
+    ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker unpause manualapp1;
+    Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Have Services    name=manualapp1    service_type=container    status=up
+
     # Uninstall
     ${operation}=    Cumulocity.Execute Shell Command    sudo tedge-container engine docker rm manualapp1 --force
     Operation Should Be SUCCESSFUL    ${operation}

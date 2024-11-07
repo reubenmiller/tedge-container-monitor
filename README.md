@@ -43,7 +43,6 @@ It will be moved to the [tedge-container-plugin](https://github.com/thin-edge/te
     * [x] MQTT broker
     * [x] Cumulocity Local Proxy
 
-* [ ] Fix bug where fetching metrics affects the subscription to the container engine events (or the handling of incoming events)
 
 ### Phase 2
 

@@ -10,12 +10,13 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 )
 
 func NewFinalizeCommand(ctx cli.Cli) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "finalize",
 		Short: "Finalize container install/remove operation",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -41,4 +42,6 @@ func NewFinalizeCommand(ctx cli.Cli) *cobra.Command {
 			return nil
 		},
 	}
+	viper.SetDefault("container.pruneImages", false)
+	return cmd
 }

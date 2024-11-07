@@ -16,17 +16,17 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/thin-edge/tedge-container-plugin/pkg/cli"
 	"github.com/thin-edge/tedge-container-plugin/pkg/container"
 )
 
-var DefaultNetworkName string = "tedge"
-
 type InstallCommand struct {
 	*cobra.Command
 
-	ModuleVersion string
-	File          string
+	CommandContext cli.Cli
+	ModuleVersion  string
+	File           string
 }
 
 type ImageResponse struct {
@@ -35,7 +35,9 @@ type ImageResponse struct {
 
 // installCmd represents the install command
 func NewInstallCommand(ctx cli.Cli) *cobra.Command {
-	command := &InstallCommand{}
+	command := &InstallCommand{
+		CommandContext: ctx,
+	}
 	cmd := &cobra.Command{
 		Use:   "install <MODULE_NAME>",
 		Short: "Install/run a container",
@@ -45,12 +47,14 @@ func NewInstallCommand(ctx cli.Cli) *cobra.Command {
 
 	cmd.Flags().StringVar(&command.ModuleVersion, "module-version", "", "Software version to install")
 	cmd.Flags().StringVar(&command.File, "file", "", "File")
+	viper.SetDefault("container.alwaysPull", false)
 	command.Command = cmd
 	return cmd
 }
 
 func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 	slog.Info("Executing", "cmd", cmd.CalledAs(), "args", args)
+	commonNetwork := c.CommandContext.GetSharedContainerNetwork()
 	containerName := args[0]
 	imageRef := c.ModuleVersion
 
@@ -92,7 +96,7 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create shared network
-	if err := cli.CreateSharedNetwork(ctx, DefaultNetworkName); err != nil {
+	if err := cli.CreateSharedNetwork(ctx, commonNetwork); err != nil {
 		return err
 	}
 
@@ -105,7 +109,7 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if len(images) == 0 {
+	if len(images) == 0 || c.CommandContext.GetBool("container.alwaysPull") {
 		slog.Info("Pulling image.", "ref", imageRef)
 		out, err := cli.Client.ImagePull(ctx, imageRef, image.PullOptions{})
 		if err != nil {
@@ -144,8 +148,8 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 		},
 		&network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				DefaultNetworkName: {
-					NetworkID: DefaultNetworkName,
+				commonNetwork: {
+					NetworkID: commonNetwork,
 				},
 			},
 		},

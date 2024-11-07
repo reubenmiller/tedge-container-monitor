@@ -16,13 +16,12 @@ import (
 	"github.com/thin-edge/tedge-container-plugin/pkg/utils"
 )
 
-var DefaultNetworkName string = "tedge"
-
 type InstallCommand struct {
 	*cobra.Command
 
-	ModuleVersion string
-	File          string
+	CommandContext cli.Cli
+	ModuleVersion  string
+	File           string
 }
 
 type ImageResponse struct {
@@ -31,7 +30,9 @@ type ImageResponse struct {
 
 // installCmd represents the install command
 func NewInstallCommand(ctx cli.Cli) *cobra.Command {
-	command := &InstallCommand{}
+	command := &InstallCommand{
+		CommandContext: ctx,
+	}
 	cmd := &cobra.Command{
 		Use:   "install <MODULE_NAME>",
 		Short: "Install/run a container-group",
@@ -93,7 +94,7 @@ func (c *InstallCommand) RunE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create shared network
-	if err := cli.CreateSharedNetwork(ctx, DefaultNetworkName); err != nil {
+	if err := cli.CreateSharedNetwork(ctx, c.CommandContext.GetSharedContainerNetwork()); err != nil {
 		return err
 	}
 

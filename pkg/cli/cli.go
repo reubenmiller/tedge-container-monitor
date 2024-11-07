@@ -23,6 +23,10 @@ type Cli struct {
 }
 
 func (c *Cli) OnInit() {
+
+	// Set shared config
+	viper.SetDefault("container.network", "tedge")
+
 	if c.ConfigFile != "" && utils.PathExists(c.ConfigFile) {
 		// Use config file from the flag.
 		viper.SetConfigFile(c.ConfigFile)
@@ -36,8 +40,9 @@ func (c *Cli) OnInit() {
 			viper.SetConfigFile(LinuxConfigFilePath)
 		} else {
 			// Search config in home directory with name ".cobra" (without extension).
-			viper.SetConfigType("yaml")
+			viper.SetConfigType("json")
 			viper.SetConfigType("toml")
+			viper.SetConfigType("yaml")
 			viper.SetConfigName(".tedge-container-plugin")
 		}
 	}
@@ -109,6 +114,10 @@ func (c *Cli) DeleteFromCloud() bool {
 
 func (c *Cli) GetMQTTHost() string {
 	return viper.GetString("client.mqtt.host")
+}
+
+func (c *Cli) GetSharedContainerNetwork() string {
+	return viper.GetString("container.network")
 }
 
 func (c *Cli) GetMetricsInterval() time.Duration {

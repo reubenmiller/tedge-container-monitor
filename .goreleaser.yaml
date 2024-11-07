@@ -114,15 +114,15 @@ nfpms:
           group: tedge
 
       # Services
-      - src: ./packaging/services/systemd/tedge-container-monitor.service
-        dst: /usr/lib/systemd/system/tedge-container-monitor.service
+      - src: ./packaging/services/systemd/tedge-container-plugin.service
+        dst: /usr/lib/systemd/system/tedge-container-plugin.service
         file_info:
           mode: 0644
           owner: tedge
           group: tedge
 
       - src: ./packaging/services/init.d/service.init
-        dst: /etc/init.d/tedge-container-monitor
+        dst: /etc/init.d/tedge-container-plugin
         file_info:
           mode: 0644
           owner: tedge

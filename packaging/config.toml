@@ -1,5 +1,5 @@
 log_level = "info"
-service_name = "tedge-container-monitor"
+service_name = "tedge-container-plugin"
 
 [filter.include]
 names = [ ]
